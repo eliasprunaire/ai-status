@@ -439,6 +439,12 @@ function renderSections() {
   }
 }
 
+// Les cartes sont reconstruites à chaque rendu : on mémorise celles qui sont dépliées
+const captureOpenCards = () => [...document.querySelectorAll('.card details[open]')].map((details) => details.closest('.card')?.id);
+const restoreOpenCards = (ids) => {
+  for (const id of ids) document.querySelector(`#${CSS.escape(id)} details`)?.setAttribute('open', '');
+};
+
 function renderAll() {
   renderSummary();
   renderOngoing();
@@ -521,16 +527,17 @@ async function refreshData(source) {
     const changed = !data || nextData.generatedAt !== data.generatedAt;
     if (changed) {
       const previousData = data;
-      const openCards = [...document.querySelectorAll('.card details[open]')].map((details) => details.closest('.card')?.id);
+      const openCards = captureOpenCards();
       data = nextData;
       try {
         renderAll();
+        restoreOpenCards(openCards);
       } catch (renderError) {
         data = previousData;
         if (previousData) {
           try {
             renderAll();
-            for (const id of openCards) document.querySelector(`#${CSS.escape(id)} details`)?.setAttribute('open', '');
+            restoreOpenCards(openCards);
           } catch {
             resetUnavailable();
           }
@@ -598,9 +605,9 @@ function setLang(next) {
     else resetUnavailable();
     return;
   }
-  const openCards = [...document.querySelectorAll('.card details[open]')].map((details) => details.closest('.card')?.id);
+  const openCards = captureOpenCards();
   renderAll();
-  for (const id of openCards) document.querySelector(`#${CSS.escape(id)} details`)?.setAttribute('open', '');
+  restoreOpenCards(openCards);
 }
 
 document.querySelectorAll('.lang-btn').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
