@@ -1,6 +1,6 @@
 {
   "name": "ai-status",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "description": "Statut opérationnel des fournisseurs de modèles IA — site statique GitHub Pages",
