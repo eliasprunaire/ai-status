@@ -58,7 +58,7 @@ Les 23 fournisseurs référencés, avec leur périmètre et leur méthode de col
 | [AWS Bedrock](https://health.aws.amazon.com/health/status) | Amazon Bedrock par région ; autres services AWS exclus | Flux JSON publics |
 | [Microsoft Azure AI](https://azure.status.microsoft/en-us/status) | Services IA, toutes régions ; incidents à large impact uniquement | Tableau HTML officiel |
 
-La collecte est programmée toutes les 30 minutes. GitHub Actions peut la retarder : l’heure affichée fait foi, et une alerte apparaît lorsque les données ont plus de deux heures. Le bouton **Rafraîchir** recharge les dernières données publiées.
+La collecte est programmée toutes les 30 minutes. GitHub Actions peut la retarder : l’heure affichée fait foi, et une alerte apparaît lorsque les données ont plus de deux heures. Le bouton **Rafraîchir** recharge les dernières données publiées et indique si une nouvelle collecte est disponible ; il ne déclenche pas de collecte.
 
 ## Lancer en local
 

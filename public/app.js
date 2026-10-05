@@ -5,8 +5,9 @@ import { DISPLAY_ORDER, isActiveMaintenanceState, MAX_STATUS_BYTES, safeExternal
 
 import { BUILD_INFO } from './build-info.js';
 
-const FRESHNESS_MS = 60 * 1000;
+const FRESHNESS_MS = 15 * 1000;
 const REFRESH_MS = 30 * 60 * 1000;
+const REFRESH_STATUS_MS = 8 * 1000;
 const FETCH_TIMEOUT_MS = 15 * 1000;
 const STALE_MS = 2 * 60 * 60 * 1000; // 4 cadences de collecte ratées
 // Textes de l'interface en deux langues. Le français reste la langue par défaut ; le choix
@@ -24,11 +25,11 @@ const T = {
     allOperational: 'Tous les fournisseurs sont opérationnels', noIncident: 'Aucun incident déclaré',
     worstAt: (label, n) => `${label} chez ${countWord(n, 'fournisseur')}`,
     unknownSources: (n) => `${countWord(n, 'source')} non vérifiée${n > 1 ? 's' : ''}`,
-    freshness: (refreshed, refreshAge, collected, collectionAge) => `Actualisé ${refreshed}${refreshAge ? ` (${refreshAge})` : ''} · collecte ${collected}${collectionAge ? ` (${collectionAge})` : ''}`,
+    freshness: (refreshed, refreshAge, collected, collectionAge) => `Collecte ${collected}${collectionAge ? ` (${collectionAge})` : ''} · vérifié ${refreshed}${refreshAge ? ` (${refreshAge})` : ''}`,
     stale: (age) => `Données obsolètes : dernière collecte ${age}. Les états affichés ne reflètent peut-être plus la situation actuelle.`,
     justNow: 'à l’instant', minutesAgo: (n) => `il y a ${n} min`, hoursAgo: (h) => `il y a ${h} h`, daysAgo: (d) => `il y a ${d} j`,
     unavailable: 'Données indisponibles', cannotLoad: 'Impossible de charger les données.',
-    refreshing: 'Actualisation en cours…', refreshed: 'Données actualisées.', refreshFailed: 'Échec de l’actualisation.',
+    refreshing: 'Actualisation en cours…', refreshed: 'Données actualisées.', upToDate: (age) => `Aucune nouvelle collecte publiée${age ? ` : dernière ${age}` : ''}.`, refreshFailed: 'Échec de l’actualisation.',
     refreshError: 'Actualisation impossible : dernières données valides conservées.',
     components: (n) => countWord(n, 'composant'), globalStatus: 'Statut global',
     incidents: 'Incidents', maintenances: 'Maintenances', models: 'Modèles', services: 'Services', componentsTitle: 'Composants',
@@ -56,11 +57,11 @@ const T = {
     allOperational: 'All providers are operational', noIncident: 'No incident reported',
     worstAt: (label, n) => `${label} at ${countWord(n, 'provider')}`,
     unknownSources: (n) => `${countWord(n, 'source')} unverified`,
-    freshness: (refreshed, refreshAge, collected, collectionAge) => `Refreshed ${refreshed}${refreshAge ? ` (${refreshAge})` : ''} · collected ${collected}${collectionAge ? ` (${collectionAge})` : ''}`,
+    freshness: (refreshed, refreshAge, collected, collectionAge) => `Collected ${collected}${collectionAge ? ` (${collectionAge})` : ''} · checked ${refreshed}${refreshAge ? ` (${refreshAge})` : ''}`,
     stale: (age) => `Stale data: last collection ${age}. The states shown may no longer reflect the current situation.`,
     justNow: 'just now', minutesAgo: (n) => `${n} min ago`, hoursAgo: (h) => `${h} h ago`, daysAgo: (d) => `${d} d ago`,
     unavailable: 'Data unavailable', cannotLoad: 'Unable to load the data.',
-    refreshing: 'Refreshing…', refreshed: 'Data refreshed.', refreshFailed: 'Refresh failed.',
+    refreshing: 'Refreshing…', refreshed: 'Data refreshed.', upToDate: (age) => `No new collection published${age ? `: last one ${age}` : ''}.`, refreshFailed: 'Refresh failed.',
     refreshError: 'Refresh failed: last valid data kept.',
     components: (n) => countWord(n, 'component'), globalStatus: 'Global status',
     incidents: 'Incidents', maintenances: 'Maintenances', models: 'Models', services: 'Services', componentsTitle: 'Components',
@@ -158,7 +159,7 @@ function fmtDate(iso) {
   return d.toLocaleString(T[lang].locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
 }
 
-// Âge relatif rafraîchi chaque minute par renderFreshness via data-age
+// Âge relatif rafraîchi toutes les 15 s par renderFreshness via data-age
 function ageSpan(iso) {
   const s = el('span', null, ageLabel(iso) ?? '');
   s.dataset.age = iso;
@@ -489,19 +490,27 @@ async function readStatusJson(response) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+// Retour visible du bouton : sans lui, un rechargement sans nouvelle collecte ne change rien à l'écran
+let statusTimer;
+function showRefreshStatus(text, autoClear = true) {
+  const status = $('refresh-status');
+  status.textContent = text;
+  clearTimeout(statusTimer);
+  if (autoClear) statusTimer = setTimeout(() => { status.textContent = ''; }, REFRESH_STATUS_MS);
+}
+
 async function refreshData(source) {
   if (refreshing) return;
   refreshing = true;
   lastAttemptAt = Date.now();
   scheduleRefresh(REFRESH_MS);
   const button = $('refresh');
-  const status = $('refresh-status');
   const error = $('refresh-error');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   button.disabled = true;
   button.setAttribute('aria-busy', 'true');
-  if (source === 'manual') status.textContent = t('refreshing');
+  if (source === 'manual') showRefreshStatus(t('refreshing'), false);
 
   try {
     const res = await fetch('data/status.json', { cache: 'no-store', signal: controller.signal });
@@ -510,7 +519,8 @@ async function refreshData(source) {
     if (!validateStatusDocument(nextData)) throw new Error('format de données inattendu');
     if (data && Date.parse(nextData.generatedAt) < Date.parse(data.generatedAt)) throw new Error('données plus anciennes que celles affichées');
 
-    if (!data || nextData.generatedAt !== data.generatedAt) {
+    const changed = !data || nextData.generatedAt !== data.generatedAt;
+    if (changed) {
       const previousData = data;
       const openCards = [...document.querySelectorAll('.card details[open]')].map((details) => details.closest('.card')?.id);
       data = nextData;
@@ -536,12 +546,12 @@ async function refreshData(source) {
     renderFreshness();
     error.hidden = true;
     error.textContent = '';
-    if (source === 'manual') status.textContent = t('refreshed');
+    if (source === 'manual') showRefreshStatus(changed ? t('refreshed') : t('upToDate')(ageLabel(data.generatedAt)));
   } catch {
     if (!data) resetUnavailable();
     error.textContent = t('refreshError');
     error.hidden = false;
-    if (source === 'manual') status.textContent = t('refreshFailed');
+    if (source === 'manual') showRefreshStatus(t('refreshFailed'));
   } finally {
     clearTimeout(timeout);
     refreshing = false;
