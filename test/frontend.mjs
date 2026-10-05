@@ -297,8 +297,13 @@ try {
     await page.getByRole('button', { name: 'Rafraîchir' }).click();
     await page.locator('#refresh[aria-busy="false"]').waitFor();
     const freshness = await page.locator('#collected-at').textContent();
-    assert.match(freshness, /Actualisé .+ \(à l’instant\)/);
-    assert.match(freshness, /collecte .+ \(il y a 11 min\)/);
+    assert.match(freshness, /vérifié .+ \(à l’instant\)/);
+    assert.match(freshness, /^Collecte .+ \(il y a 11 min\)/);
+    assert.match(await page.locator('#refresh-status').textContent(), /Aucune nouvelle collecte publiée : dernière il y a 11 min/);
+    assert.equal(await page.locator('#refresh-status').isVisible(), true);
+    await page.clock.runFor(75 * 1000);
+    assert.match(await page.locator('#collected-at').textContent(), /vérifié .+ \(il y a 1 min\)/, 'l’âge de la vérification avance');
+    assert.equal(await page.locator('#refresh-status').textContent(), '');
   });
 
   for (const width of [390, 1440]) {
@@ -357,7 +362,7 @@ try {
     assert.equal(await page.locator('#global .card-scope').textContent(), 'Global cloud status');
     assert.equal(await page.locator('#global .card-state').textContent(), 'Degraded', 'libellé du contrat, pas du JSON');
     assert.equal(await page.locator('#g-cn').textContent(), 'Providers · China');
-    assert.match(await page.locator('#collected-at').textContent(), /^Refreshed .* · collected /);
+    assert.match(await page.locator('#collected-at').textContent(), /^Collected .* · checked /);
     assert.equal(await page.locator('.foot-title').first().textContent(), 'Collection');
     assert.match(await page.locator('#global .meta').textContent(), /Read via Alibaba Cloud API/, 'libellé de famille fourni par le collecteur');
     assert.equal(await page.locator('#global .incident-title').getAttribute('lang'), 'en', 'titre brut de la source : langue détectée, jamais traduit');
