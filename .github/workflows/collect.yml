@@ -2,6 +2,8 @@ name: collect
 
 on:
   schedule:
+    # Secours : GitHub retarde ou ignore ce cron. La cadence de 5 minutes vient de
+    # scripts/dispatch-collect.sh (workflow_dispatch), voir CONTRIBUTING.md
     - cron: '7,37 * * * *'
   workflow_dispatch:
   push:

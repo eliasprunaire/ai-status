@@ -38,6 +38,20 @@ Une collecte réelle (`npm run collect`) contacte les sources ; avec `MISTRAL_AP
 
 Les PR exécutent les tests. La publication du site se fait depuis `main`.
 
+## Planification de la collecte
+
+Le cron de `collect.yml` (`7,37 * * * *`) ne tient pas sa cadence : GitHub l’exécute avec des retards de plusieurs heures. Il reste en secours. La cadence de 5 minutes vient d’un déclencheur externe qui appelle `workflow_dispatch` via `scripts/dispatch-collect.sh`.
+
+1. Créer un jeton à granularité fine limité à ce dépôt, avec le seul droit **Actions : lecture et écriture**, et une expiration.
+2. Le ranger hors du dépôt, lisible par son seul utilisateur (`chmod 600`).
+3. Planifier le script, par exemple avec `crontab -e` :
+
+```cron
+*/5 * * * * GH_TOKEN="$(cat /etc/ai-status/gh-token)" /opt/ai-status/scripts/dispatch-collect.sh
+```
+
+Le script sort en erreur si GitHub ne répond pas `204`. Les exécutions se mettent en file (`concurrency`) : au plus une collecte en cours et une en attente. Chaque exécution rejoue les tests, puis collecte, puis déploie. Avec une clé Mistral, chaque collecte fait un appel facturable (voir ci-dessus). Renouveler le jeton avant son expiration : sans lui, la page retombe sur le cron de secours et l’alerte « données obsolètes » s’affiche après 20 minutes.
+
 ## Versions
 
 Utiliser des messages de commit [Conventional Commits](https://www.conventionalcommits.org/fr/v1.0.0/) : `fix:` et `perf:` déclenchent un correctif, `feat:` une version mineure. Avant `1.0.0`, une rupture signalée par `!` ou `BREAKING CHANGE:` déclenche une version mineure et figure dans les notes. Sans rupture, `docs:`, `test:`, `ci:` et `chore:` ne déclenchent pas seuls de release. Le passage à `1.0.0` demande une décision explicite ; le contrat JSON v2 garde sa numérotation indépendante.
