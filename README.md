@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="docs/logo.svg" width="96" height="96" alt="Logo AI Status : une grille de neuf états de service">
+
 # AI Status
 
 **L’état des fournisseurs IA, sur une seule page.**
