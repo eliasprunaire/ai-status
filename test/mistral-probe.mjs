@@ -50,9 +50,64 @@ try {
   }
   globalThis.fetch = async () => new Response('x'.repeat(65537), { headers: { 'content-type': 'application/json' } });
   assert.equal((await result()).status, 'inconnu');
+
+  // Réutilisation de l'observation publiée : au plus une sonde facturée par fenêtre de 30 min
+  const reuseUrl = 'https://site.test/data/status.json';
+  const reuseProvider = { ...provider, source: { kind: 'mistral_probe', reuse: { url: reuseUrl, maxAgeMinutes: 30 } } };
+  const run = async (get) => buildOutput([reuseProvider], await collectAll([reuseProvider], { mistral_probe: mistral }, get), new Date().toISOString(), { mistral_probe: mistral }).providers[0];
+  const ago = (minutes) => new Date(Date.now() - minutes * 60_000).toISOString();
+  const previousDoc = async (fetchImpl, minutes) => {
+    globalThis.fetch = fetchImpl;
+    const doc = JSON.parse(JSON.stringify(buildOutput([provider], await collectAll([provider], { mistral_probe: mistral }, async () => { assert.fail('pas de GET'); }), new Date().toISOString(), { mistral_probe: mistral })));
+    doc.providers[0].collectedAt = ago(minutes);
+    return doc;
+  };
+  const healthy = async () => new Response(JSON.stringify(success), { headers: { 'content-type': 'application/json' } });
+  const countingFetch = () => { calls = 0; globalThis.fetch = async () => { calls++; return healthy(); }; };
+
+  const recent = await previousDoc(healthy, 10);
+  let requested;
+  countingFetch();
+  let r = await run(async (url) => { requested = url; return recent; });
+  assert.equal(calls, 0, 'observation saine de 10 min : aucun appel Mistral');
+  assert.equal(r.status, 'operationnel');
+  assert.equal(r.collectedAt, recent.providers[0].collectedAt, 'l’heure de la sonde d’origine est conservée');
+  assert.ok(requested.startsWith(`${reuseUrl}?t=`), 'paramètre unique contre le cache du CDN');
+
+  for (const [label, doc, expectedCalls] of [
+    ['trop ancienne (31 min)', await previousDoc(healthy, 31), 1],
+    ['heure dans le futur', await previousDoc(healthy, -5), 1],
+    ['dégradation précédente', await previousDoc(async () => new Response('x', { status: 500 }), 5), 1],
+    ['échec précédent', await previousDoc(async () => { throw new Error('réseau'); }, 5), 1],
+    ['document invalide', { schemaVersion: 2 }, 1],
+  ]) {
+    countingFetch();
+    r = await run(async () => doc);
+    assert.equal(calls, expectedCalls, `${label} : nouvelle sonde`);
+    assert.equal(r.status, 'operationnel');
+    assert.ok(Date.now() - Date.parse(r.collectedAt) < 60_000, `${label} : heure de la nouvelle sonde`);
+  }
+
+  countingFetch();
+  r = await run(async () => { throw new Error('site injoignable'); });
+  assert.equal(calls, 1, 'lecture impossible : on sonde');
+  assert.equal(r.status, 'operationnel');
+
+  // Une observation récente mais sans clé n'est jamais publiée comme saine
+  delete process.env.MISTRAL_API_KEY;
+  countingFetch();
+  r = await run(async () => recent);
+  assert.equal(calls, 0);
+  assert.equal(r.status, 'inconnu');
+  process.env.MISTRAL_API_KEY = key;
+
+  // Le runner ignore une heure d'observation postérieure à l'heure courante
+  const future = { collect: async () => ({ indicator: 'operationnel', components: [], incidents: [], maintenances: [], collectedAt: new Date(Date.now() + 3_600_000).toISOString() }) };
+  const [settledFuture] = await collectAll([provider], { mistral_probe: future }, async () => { assert.fail('pas de GET'); });
+  assert.ok(Date.parse(settledFuture.value.collectedAt) <= Date.now(), 'heure future remplacée par l’heure courante');
 } finally {
   globalThis.fetch = originalFetch;
   if (originalKey === undefined) delete process.env.MISTRAL_API_KEY;
   else process.env.MISTRAL_API_KEY = originalKey;
 }
-console.log('OK — sonde Mistral bornée, clé isolée et erreurs sans secret');
+console.log('OK — sonde Mistral bornée, clé isolée, erreurs sans secret et réutilisation sous 30 min');
