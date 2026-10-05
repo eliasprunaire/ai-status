@@ -50,7 +50,7 @@ Le cron de `collect.yml` (`7,37 * * * *`) ne tient pas sa cadence : GitHub l’e
 */5 * * * * GH_TOKEN="$(cat /etc/ai-status/gh-token)" /opt/ai-status/scripts/dispatch-collect.sh
 ```
 
-Le script sort en erreur si GitHub ne répond pas `204`. Les exécutions se mettent en file (`concurrency`) : au plus une collecte en cours et une en attente. Chaque exécution rejoue les tests, puis collecte, puis déploie. Avec une clé Mistral, chaque collecte fait un appel facturable (voir ci-dessus). Renouveler le jeton avant son expiration : sans lui, la page retombe sur le cron de secours et l’alerte « données obsolètes » s’affiche après 20 minutes.
+Le script sort en erreur si GitHub ne répond pas `204`. Les exécutions se mettent en file (`concurrency`) : au plus une collecte en cours et une en attente. Chaque exécution rejoue les tests, puis collecte, puis déploie. La sonde Mistral, facturable, ne s’exécute qu’une fois par fenêtre de 30 minutes : les autres collectes reprennent l’observation publiée tant qu’elle est saine. Renouveler le jeton avant son expiration : sans lui, la page retombe sur le cron de secours et l’alerte « données obsolètes » s’affiche après 20 minutes.
 
 ## Versions
 
