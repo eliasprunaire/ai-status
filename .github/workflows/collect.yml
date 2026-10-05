@@ -21,6 +21,10 @@ concurrency:
 jobs:
   test:
     uses: ./.github/workflows/tests.yml
+    # Le garde de tests.yml refuse tout workflow_dispatch sans SHA attendu, y compris
+    # celui de ce workflow (appelé, il voit l'événement de l'appelant)
+    with:
+      expected_sha: ${{ github.sha }}
     permissions:
       contents: read
 
