@@ -297,12 +297,12 @@ try {
     await page.getByRole('button', { name: 'Rafraîchir' }).click();
     await page.locator('#refresh[aria-busy="false"]').waitFor();
     const freshness = await page.locator('#collected-at').textContent();
-    assert.match(freshness, /vérifié .+ \(à l’instant\)/);
+    assert.match(freshness, /vérifié [^(]+$/, 'pas d’âge relatif pour la vérification');
     assert.match(freshness, /^Collecte .+ \(il y a 11 min\)/);
     assert.match(await page.locator('#refresh-status').textContent(), /Aucune nouvelle collecte publiée : dernière il y a 11 min/);
     assert.equal(await page.locator('#refresh-status').isVisible(), true);
     await page.clock.runFor(75 * 1000);
-    assert.match(await page.locator('#collected-at').textContent(), /vérifié .+ \(il y a 1 min\)/, 'l’âge de la vérification avance');
+    assert.match(await page.locator('#collected-at').textContent(), /^Collecte .+ \(il y a 12 min\)/, 'l’âge de la collecte avance');
     assert.equal(await page.locator('#refresh-status').textContent(), '');
   });
 

@@ -25,7 +25,7 @@ const T = {
     allOperational: 'Tous les fournisseurs sont opérationnels', noIncident: 'Aucun incident déclaré',
     worstAt: (label, n) => `${label} chez ${countWord(n, 'fournisseur')}`,
     unknownSources: (n) => `${countWord(n, 'source')} non vérifiée${n > 1 ? 's' : ''}`,
-    freshness: (refreshed, refreshAge, collected, collectionAge) => `Collecte ${collected}${collectionAge ? ` (${collectionAge})` : ''} · vérifié ${refreshed}${refreshAge ? ` (${refreshAge})` : ''}`,
+    freshness: (refreshed, collected, collectionAge) => `Collecte ${collected}${collectionAge ? ` (${collectionAge})` : ''} · vérifié ${refreshed}`,
     stale: (age) => `Données obsolètes : dernière collecte ${age}. Les états affichés ne reflètent peut-être plus la situation actuelle.`,
     justNow: 'à l’instant', minutesAgo: (n) => `il y a ${n} min`, hoursAgo: (h) => `il y a ${h} h`, daysAgo: (d) => `il y a ${d} j`,
     unavailable: 'Données indisponibles', cannotLoad: 'Impossible de charger les données.',
@@ -57,7 +57,7 @@ const T = {
     allOperational: 'All providers are operational', noIncident: 'No incident reported',
     worstAt: (label, n) => `${label} at ${countWord(n, 'provider')}`,
     unknownSources: (n) => `${countWord(n, 'source')} unverified`,
-    freshness: (refreshed, refreshAge, collected, collectionAge) => `Collected ${collected}${collectionAge ? ` (${collectionAge})` : ''} · checked ${refreshed}${refreshAge ? ` (${refreshAge})` : ''}`,
+    freshness: (refreshed, collected, collectionAge) => `Collected ${collected}${collectionAge ? ` (${collectionAge})` : ''} · checked ${refreshed}`,
     stale: (age) => `Stale data: last collection ${age}. The states shown may no longer reflect the current situation.`,
     justNow: 'just now', minutesAgo: (n) => `${n} min ago`, hoursAgo: (h) => `${h} h ago`, daysAgo: (d) => `${d} d ago`,
     unavailable: 'Data unavailable', cannotLoad: 'Unable to load the data.',
@@ -224,9 +224,8 @@ function renderFreshness() {
   if (!data) return;
   const at = $('collected-at');
   const refreshedAt = lastRefreshAt ?? data.generatedAt;
-  const refreshAge = ageLabel(refreshedAt);
   const collectionAge = ageLabel(data.generatedAt);
-  at.textContent = t('freshness')(fmtDate(refreshedAt), refreshAge, fmtDate(data.generatedAt), collectionAge);
+  at.textContent = t('freshness')(fmtDate(refreshedAt), fmtDate(data.generatedAt), collectionAge);
   const stale = Date.now() - new Date(data.generatedAt).getTime() > STALE_MS;
   const banner = $('stale');
   banner.hidden = !stale;
