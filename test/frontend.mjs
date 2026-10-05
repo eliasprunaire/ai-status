@@ -7,6 +7,7 @@ import { BUILD_INFO } from '../public/build-info.js';
 
 const NOW = Date.parse('2026-09-04T08:00:00Z');
 const MINUTE = 60_000;
+const REFRESH = 2 * MINUTE; // intervalle de rechargement automatique de la page
 const files = {
   '/': ['text/html; charset=utf-8', readFileSync(new URL('../public/index.html', import.meta.url))],
   '/build-info.js': ['text/javascript; charset=utf-8', readFileSync(new URL('../public/build-info.js', import.meta.url))],
@@ -93,7 +94,7 @@ try {
     await page.clock.install({ time: NOW });
     try {
       await page.goto(`http://127.0.0.1:${port}/`);
-      await page.locator('#refresh[aria-busy="false"]').waitFor();
+      await page.locator('#providers[aria-busy="false"]').waitFor({ state: 'attached' });
       await run(page);
       assert.equal(await page.locator('#build-version').textContent(), `${BUILD_INFO.version} · ${BUILD_INFO.sha.slice(0, 7)}`);
       assert.equal(await page.locator('#build-version').getAttribute('href'), `https://github.com/eliasprunaire/ai-status/commit/${BUILD_INFO.sha}`);
@@ -112,7 +113,7 @@ try {
     await page.locator('#stale').waitFor();
     await page.getByRole('searchbox').fill('nouveau');
     await page.locator('#sort').selectOption('name');
-    await page.clock.runFor(30 * MINUTE);
+    await page.clock.runFor(REFRESH);
     await page.getByText('Nouveau fournisseur', { exact: true }).waitFor();
     assert.equal(await page.getByRole('searchbox').inputValue(), 'nouveau');
     assert.equal(await page.locator('#sort').inputValue(), 'name');
@@ -120,43 +121,24 @@ try {
     assert.equal(await page.locator('#stale').isHidden(), true);
   });
 
-  await scenario([{ body: old }, { body: fresh }], async (page) => {
-    await page.getByText('Ancien fournisseur', { exact: true }).waitFor();
-    const refresh = page.getByRole('button', { name: 'Rafraîchir' });
-    await refresh.focus();
-    await page.keyboard.press('Enter');
-    await page.getByText('Nouveau fournisseur', { exact: true }).waitFor();
-    assert.match(await page.locator('#refresh-status').textContent(), /Données actualisées/);
-    assert.equal(requests, 2, 'le bouton ignore l’échéance de 30 minutes');
-  });
-
   await scenario([{ status: 500 }, { body: fresh }], async (page) => {
     await page.getByText('Données indisponibles', { exact: true }).waitFor();
     await page.locator('#refresh-error').waitFor();
-    await page.getByRole('button', { name: 'Rafraîchir' }).click();
+    await page.clock.runFor(REFRESH);
     await page.getByText('Nouveau fournisseur', { exact: true }).waitFor();
     assert.equal(await page.locator('#refresh-error').isHidden(), true);
-  });
-
-  await scenario([{ status: 500 }, { body: fresh }], async (page) => {
-    await page.getByText('Données indisponibles', { exact: true }).waitFor();
-    await page.locator('#refresh-error').waitFor();
-    await page.getByRole('button', { name: 'Rafraîchir' }).waitFor({ state: 'visible' });
-    assert.equal(await page.getByRole('button', { name: 'Rafraîchir' }).isEnabled(), true);
-    await page.clock.runFor(30 * MINUTE);
-    await page.getByText('Nouveau fournisseur', { exact: true }).waitFor();
     assert.equal(requests, 2);
   });
 
   await scenario([{ body: old }, { status: 500 }, { body: { schemaVersion: 2, generatedAt: new Date(NOW).toISOString(), providers: [] } }], async (page) => {
     await page.getByText('Ancien fournisseur', { exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Rafraîchir' }).click();
+    await page.clock.runFor(REFRESH);
     await page.locator('#refresh-error').waitFor();
     await page.getByText('Ancien fournisseur', { exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Rafraîchir' }).click();
-    await page.locator('#refresh-error').waitFor();
+    await page.clock.runFor(REFRESH);
     await waitForRequests(3);
-    await page.locator('#refresh[aria-busy="false"]').waitFor();
+    await page.locator('#providers[aria-busy="false"]').waitFor({ state: 'attached' });
+    await page.locator('#refresh-error').waitFor();
     assert.equal(await page.getByText('Ancien fournisseur', { exact: true }).count(), 1);
     assert.equal(await page.getByText('Nouveau fournisseur', { exact: true }).count(), 0);
   });
@@ -165,7 +147,7 @@ try {
   const older = statusDoc(new Date(NOW - MINUTE).toISOString(), 'Données régressives');
   await scenario([{ body: current }, { body: older }], async (page) => {
     await page.getByText('Données actuelles', { exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Rafraîchir' }).click();
+    await page.clock.runFor(REFRESH);
     await page.locator('#refresh-error').waitFor();
     assert.equal(await page.getByText('Données actuelles', { exact: true }).count(), 1);
     assert.equal(await page.getByText('Données régressives', { exact: true }).count(), 0);
@@ -175,7 +157,7 @@ try {
   inconsistent.summary.counts.operationnel = 2;
   await scenario([{ body: current }, { body: inconsistent }], async (page) => {
     await page.getByText('Données actuelles', { exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Rafraîchir' }).click();
+    await page.clock.runFor(REFRESH);
     await page.locator('#refresh-error').waitFor();
     assert.equal(await page.getByText('Données actuelles', { exact: true }).count(), 1);
   });
@@ -236,11 +218,9 @@ try {
 
   await scenario([{ body: old }, { hold: true, body: fresh }], async (page) => {
     await page.getByText('Ancien fournisseur', { exact: true }).waitFor();
-    const refresh = page.getByRole('button', { name: 'Rafraîchir' });
-    const click = refresh.click();
+    await page.clock.runFor(REFRESH);
     await waitForRequests(2);
-    assert.equal(await refresh.isDisabled(), true);
-    assert.equal(await refresh.getAttribute('aria-busy'), 'true');
+    assert.equal(await page.locator('#providers').getAttribute('aria-busy'), 'true');
     await page.evaluate(() => {
       window.dispatchEvent(new Event('online'));
       window.dispatchEvent(new Event('focus'));
@@ -248,31 +228,28 @@ try {
     });
     assert.equal(requests, 2, 'tous les déclencheurs partagent le même verrou');
     releaseHeld();
-    await click;
     await page.getByText('Nouveau fournisseur', { exact: true }).waitFor();
-    assert.equal(await refresh.isEnabled(), true);
-    assert.equal(await refresh.getAttribute('aria-busy'), 'false');
+    await page.locator('#providers[aria-busy="false"]').waitFor({ state: 'attached' });
   });
 
   await scenario([{ body: old }, { hold: true }], async (page) => {
     await page.getByText('Ancien fournisseur', { exact: true }).waitFor();
     await page.clock.pauseAt(await page.evaluate(() => Date.now()));
-    const refresh = page.getByRole('button', { name: 'Rafraîchir' });
-    const click = refresh.click();
+    await page.clock.runFor(REFRESH);
     await waitForRequests(2);
-    await page.clock.runFor(14_999);
-    assert.equal(await refresh.isDisabled(), true);
-    await page.clock.runFor(1);
-    await click;
+    // l'échéance tombe un peu avant la fin de REFRESH : marge de quelques secondes sur le délai de 15 s
+    await page.clock.runFor(10_000);
+    assert.equal(await page.locator('#providers').getAttribute('aria-busy'), 'true');
+    await page.clock.runFor(10_000);
     await page.locator('#refresh-error').waitFor();
-    assert.equal(await refresh.isEnabled(), true);
+    assert.equal(await page.locator('#providers').getAttribute('aria-busy'), 'false');
     assert.equal(await page.getByText('Ancien fournisseur', { exact: true }).count(), 1);
   });
 
   await scenario([{ body: old }, { body: fresh }], async (page) => {
     await page.getByText('Ancien fournisseur', { exact: true }).waitFor();
     const currentTime = await page.evaluate(() => Date.now());
-    await page.clock.setSystemTime(currentTime + 30 * MINUTE);
+    await page.clock.setSystemTime(currentTime + REFRESH);
     assert.equal(requests, 1, 'changer seulement l’heure ne déclenche pas le minuteur');
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await page.getByText('Nouveau fournisseur', { exact: true }).waitFor();
@@ -282,8 +259,9 @@ try {
   await scenario([{ body: old }, { body: statusDoc(old.generatedAt, 'Contenu incohérent') }], async (page) => {
     await page.getByText('Ancien fournisseur', { exact: true }).waitFor();
     await page.locator('.card details').evaluate((details) => { details.open = true; });
-    await page.getByRole('button', { name: 'Rafraîchir' }).click();
-    await page.locator('#refresh[aria-busy="false"]').waitFor();
+    await page.clock.runFor(REFRESH);
+    await waitForRequests(2);
+    await page.locator('#providers[aria-busy="false"]').waitFor({ state: 'attached' });
     assert.equal(await page.getByText('Ancien fournisseur', { exact: true }).count(), 1);
     assert.equal(await page.getByText('Contenu incohérent', { exact: true }).count(), 0);
     assert.equal(await page.locator('.card details').getAttribute('open'), '');
@@ -293,7 +271,7 @@ try {
     await page.getByText('Ancien fournisseur', { exact: true }).waitFor();
     await page.locator('.card details summary').first().click();
     assert.equal(await page.locator('.card details[open]').count(), 1);
-    await page.getByRole('button', { name: 'Rafraîchir' }).click();
+    await page.clock.runFor(REFRESH);
     await page.getByText('Nouveau fournisseur', { exact: true }).waitFor();
     assert.equal(await page.locator('.card details[open]').count(), 1, 'carte ouverte conservée après de nouvelles données');
   });
@@ -302,17 +280,12 @@ try {
   await scenario([{ body: unchanged }, { body: unchanged }], async (page) => {
     await page.getByText('Données inchangées', { exact: true }).waitFor();
     await page.clock.runFor(11 * MINUTE);
-    assert.match(await page.locator('#collected-at').textContent(), /il y a 11 min/);
-    await page.getByRole('button', { name: 'Rafraîchir' }).click();
-    await page.locator('#refresh[aria-busy="false"]').waitFor();
     const freshness = await page.locator('#collected-at').textContent();
-    assert.match(freshness, /vérifié [^(]+$/, 'pas d’âge relatif pour la vérification');
-    assert.match(freshness, /^Collecte .+ \(il y a 11 min\)/);
-    assert.match(await page.locator('#refresh-status').textContent(), /Aucune nouvelle collecte publiée : dernière il y a 11 min/);
-    assert.equal(await page.locator('#refresh-status').isVisible(), true);
-    await page.clock.runFor(75 * 1000);
-    assert.match(await page.locator('#collected-at').textContent(), /^Collecte .+ \(il y a 12 min\)/, 'l’âge de la collecte avance');
-    assert.equal(await page.locator('#refresh-status').textContent(), '');
+    assert.match(freshness, /^Collecte [^(]+\(il y a 11 min\)$/, 'seul l’âge de la collecte est affiché');
+    assert.equal(await page.locator('#stale').isHidden(), true);
+    await page.clock.runFor(10 * MINUTE);
+    await page.locator('#stale').waitFor();
+    assert.match(await page.locator('#stale').textContent(), /il y a 21 min/);
   });
 
   for (const width of [390, 1440]) {
@@ -361,7 +334,6 @@ try {
     assert.equal(await page.getByRole('button', { name: 'English' }).getAttribute('aria-pressed'), 'true');
     assert.equal(await page.getByRole('button', { name: 'French' }).getAttribute('aria-pressed'), 'false');
     assert.equal(await page.getByRole('link', { name: 'Skip to the provider list' }).count(), 1);
-    assert.equal(await page.getByRole('button', { name: 'Refresh' }).count(), 1);
     assert.equal(await page.getByRole('searchbox', { name: 'Search a provider, a model or a service' }).count(), 1);
     assert.equal(await page.getByRole('group', { name: 'Filter by state' }).count(), 1);
     assert.equal(await page.locator('#ongoing-title').textContent(), 'Ongoing');
@@ -371,7 +343,7 @@ try {
     assert.equal(await page.locator('#global .card-scope').textContent(), 'Global cloud status');
     assert.equal(await page.locator('#global .card-state').textContent(), 'Degraded', 'libellé du contrat, pas du JSON');
     assert.equal(await page.locator('#g-cn').textContent(), 'Providers · China');
-    assert.match(await page.locator('#collected-at').textContent(), /^Collected .* · checked /);
+    assert.match(await page.locator('#collected-at').textContent(), /^Collected .* \(just now\)$/);
     assert.equal(await page.locator('.foot-title').first().textContent(), 'Collection');
     assert.match(await page.locator('#global .meta').textContent(), /Read via Alibaba Cloud API/, 'libellé de famille fourni par le collecteur');
     assert.equal(await page.locator('#global .incident-title').getAttribute('lang'), 'en', 'titre brut de la source : langue détectée, jamais traduit');
@@ -405,7 +377,7 @@ try {
     await page.getByText('Données indisponibles', { exact: true }).waitFor();
     assert.match(await page.locator('#refresh-error').textContent(), /Actualisation impossible/);
     await page.getByRole('button', { name: 'Anglais' }).click();
-    await page.getByRole('button', { name: 'Refresh' }).click();
+    await page.clock.runFor(REFRESH);
     await page.getByText('Fournisseur test', { exact: true }).waitFor();
     assert.equal(await page.locator('#test .card-scope').textContent(), 'Test API');
   }, { storageState: { cookies: [], origins: [{ origin: `http://127.0.0.1:${port}`, localStorage: [{ name: 'lang', value: 'en' }] }] } });

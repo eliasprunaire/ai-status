@@ -117,7 +117,7 @@ body {
   letter-spacing: .1em;
   color: var(--muted);
 }
-.mono, .meta, .card-count, .incident-meta, .group-meta, .foot-links, #refresh, #result-count {
+.mono, .meta, .card-count, .incident-meta, .group-meta, .foot-links, #result-count {
   font-family: var(--font-mono);
 }
 
@@ -144,9 +144,6 @@ body {
 .overall-unknown { display: block; margin-top: 4px; font-family: var(--font-sans); font-weight: 400; font-size: 1rem; letter-spacing: 0; color: var(--muted); }
 .meta { margin: 0; color: var(--muted); font-size: .8rem; }
 .summary .meta { margin-top: 8px; }
-.refresh-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
-#refresh { padding: 3px 10px; font-size: .78rem; cursor: pointer; }
-#refresh:disabled { cursor: wait; opacity: .6; }
 
 .counts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
 

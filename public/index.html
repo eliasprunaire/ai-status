@@ -39,11 +39,7 @@
         </div>
       </div>
       <h1 id="overall" class="overall">Chargement…</h1>
-      <div class="refresh-row">
-        <p class="meta" id="collected-at"></p>
-        <button id="refresh" type="button" aria-busy="false" data-i18n="refresh">Rafraîchir</button>
-        <p class="meta" id="refresh-status" role="status"></p>
-      </div>
+      <p class="meta" id="collected-at"></p>
     </div>
     <div class="counts" id="counts" role="group" aria-label="Filtrer par état" data-i18n-aria="filterByState"></div>
   </header>
@@ -67,17 +63,17 @@
     <p class="meta" id="result-count" aria-live="polite"></p>
   </section>
 
-  <main id="providers" class="providers"></main>
+  <main id="providers" class="providers" aria-busy="false"></main>
 
   <footer class="foot" aria-label="À propos de cette page" data-i18n-aria="footAbout">
     <div class="foot-grid">
       <div>
         <h2 class="foot-title" data-i18n="footCollect">Collecte</h2>
-        <p data-i18n="footCollectText">Toutes les 30 minutes par GitHub Actions. Les données sont publiées avec la page, dans le même déploiement.</p>
+        <p data-i18n="footCollectText">Toutes les 5 minutes par GitHub Actions. Les données sont publiées avec la page, dans le même déploiement.</p>
       </div>
       <div>
         <h2 class="foot-title" data-i18n="footRefresh">Actualisation</h2>
-        <p data-i18n="footRefreshText">La page recharge les données toutes les 30 minutes, au retour dans un onglet ancien, ou avec le bouton « Rafraîchir ».</p>
+        <p data-i18n="footRefreshText">La page recharge les données toutes les 2 minutes et au retour dans un onglet ancien.</p>
       </div>
       <div>
         <h2 class="foot-title" data-i18n="footRead">Lecture</h2>

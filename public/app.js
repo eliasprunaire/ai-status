@@ -6,10 +6,9 @@ import { DISPLAY_ORDER, isActiveMaintenanceState, MAX_STATUS_BYTES, safeExternal
 import { BUILD_INFO } from './build-info.js';
 
 const FRESHNESS_MS = 15 * 1000;
-const REFRESH_MS = 30 * 60 * 1000;
-const REFRESH_STATUS_MS = 8 * 1000;
+const REFRESH_MS = 2 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 15 * 1000;
-const STALE_MS = 2 * 60 * 60 * 1000; // 4 cadences de collecte ratées
+const STALE_MS = 20 * 60 * 1000; // 4 cadences de collecte ratées (une collecte toutes les 5 minutes)
 // Textes de l'interface en deux langues. Le français reste la langue par défaut ; le choix
 // est mémorisé dans localStorage (sans dépendance) et appliqué côté client sans requête.
 // Les noms propres, titres d'incidents et textes bruts des sources ne sont jamais traduits
@@ -18,18 +17,17 @@ const T = {
     title: 'État des fournisseurs IA',
     description: 'Statut opérationnel des principaux fournisseurs de modèles IA, collecté par GitHub Actions et publié en statique.',
     skip: 'Aller à la liste des fournisseurs', brand: 'État des fournisseurs IA', loading: 'Chargement…',
-    refresh: 'Rafraîchir', filterByState: 'Filtrer par état', langGroup: 'Langue de la page', langFr: 'Français', langEn: 'Anglais',
+    filterByState: 'Filtrer par état', langGroup: 'Langue de la page', langFr: 'Français', langEn: 'Anglais',
     ongoing: 'En cours', controls: 'Recherche et tri', searchPlaceholder: 'Fournisseur, modèle ou service…',
     searchLabel: 'Rechercher un fournisseur, un modèle ou un service', sort: 'Tri', sortSeverity: 'par gravité', sortName: 'par nom',
     all: 'Tous', noResults: 'Aucun fournisseur ne correspond.', resultCount: (n, total) => `${countWord(n, 'fournisseur')} sur ${total}`,
     allOperational: 'Tous les fournisseurs sont opérationnels', noIncident: 'Aucun incident déclaré',
     worstAt: (label, n) => `${label} chez ${countWord(n, 'fournisseur')}`,
     unknownSources: (n) => `${countWord(n, 'source')} non vérifiée${n > 1 ? 's' : ''}`,
-    freshness: (refreshed, collected, collectionAge) => `Collecte ${collected}${collectionAge ? ` (${collectionAge})` : ''} · vérifié ${refreshed}`,
+    freshness: (collected, collectionAge) => `Collecte ${collected}${collectionAge ? ` (${collectionAge})` : ''}`,
     stale: (age) => `Données obsolètes : dernière collecte ${age}. Les états affichés ne reflètent peut-être plus la situation actuelle.`,
     justNow: 'à l’instant', minutesAgo: (n) => `il y a ${n} min`, hoursAgo: (h) => `il y a ${h} h`, daysAgo: (d) => `il y a ${d} j`,
     unavailable: 'Données indisponibles', cannotLoad: 'Impossible de charger les données.',
-    refreshing: 'Actualisation en cours…', refreshed: 'Données actualisées.', upToDate: (age) => `Aucune nouvelle collecte publiée${age ? ` : dernière ${age}` : ''}.`, refreshFailed: 'Échec de l’actualisation.',
     refreshError: 'Actualisation impossible : dernières données valides conservées.',
     components: (n) => countWord(n, 'composant'), globalStatus: 'Statut global',
     incidents: 'Incidents', maintenances: 'Maintenances', models: 'Modèles', services: 'Services', componentsTitle: 'Composants',
@@ -39,8 +37,8 @@ const T = {
     groups: { us: 'Fournisseurs · USA', eu: 'Fournisseurs · Europe', cn: 'Fournisseurs · Chine', cloud: 'Clouds d’inférence et API', other: 'Autres' },
     groupEmpty: 'Aucune source suivie pour l’instant.',
     incidentStates: { investigating: 'en investigation', identified: 'cause identifiée', monitoring: 'sous surveillance', 'en cours': 'en cours', in_progress: 'en cours', verifying: 'en vérification', scheduled: 'planifiée' },
-    footCollect: 'Collecte', footCollectText: 'Toutes les 30 minutes par GitHub Actions. Les données sont publiées avec la page, dans le même déploiement.',
-    footRefresh: 'Actualisation', footRefreshText: 'La page recharge les données toutes les 30 minutes, au retour dans un onglet ancien, ou avec le bouton « Rafraîchir ».',
+    footCollect: 'Collecte', footCollectText: 'Toutes les 5 minutes par GitHub Actions. Les données sont publiées avec la page, dans le même déploiement.',
+    footRefresh: 'Actualisation', footRefreshText: 'La page recharge les données toutes les 2 minutes et au retour dans un onglet ancien.',
     footRead: 'Lecture', footReadText: 'Chaque ligne dépliée donne le périmètre mesuré, la méthode de lecture, la fraîcheur, les incidents, les composants et la page officielle.',
     footUnknown: 'Non vérifié', footUnknownText: 'La source n’a pas pu être lue. Ce n’est jamais un « opérationnel » par défaut.',
     footAbout: 'À propos de cette page', footSource: 'Code source et méthode par fournisseur',
@@ -50,18 +48,17 @@ const T = {
     title: 'AI provider status',
     description: 'Operational status of the main AI model providers, collected by GitHub Actions and published as a static page.',
     skip: 'Skip to the provider list', brand: 'AI provider status', loading: 'Loading…',
-    refresh: 'Refresh', filterByState: 'Filter by state', langGroup: 'Page language', langFr: 'French', langEn: 'English',
+    filterByState: 'Filter by state', langGroup: 'Page language', langFr: 'French', langEn: 'English',
     ongoing: 'Ongoing', controls: 'Search and sort', searchPlaceholder: 'Provider, model or service…',
     searchLabel: 'Search a provider, a model or a service', sort: 'Sort', sortSeverity: 'by severity', sortName: 'by name',
     all: 'All', noResults: 'No provider matches.', resultCount: (n, total) => `${countWord(n, 'provider')} of ${total}`,
     allOperational: 'All providers are operational', noIncident: 'No incident reported',
     worstAt: (label, n) => `${label} at ${countWord(n, 'provider')}`,
     unknownSources: (n) => `${countWord(n, 'source')} unverified`,
-    freshness: (refreshed, collected, collectionAge) => `Collected ${collected}${collectionAge ? ` (${collectionAge})` : ''} · checked ${refreshed}`,
+    freshness: (collected, collectionAge) => `Collected ${collected}${collectionAge ? ` (${collectionAge})` : ''}`,
     stale: (age) => `Stale data: last collection ${age}. The states shown may no longer reflect the current situation.`,
     justNow: 'just now', minutesAgo: (n) => `${n} min ago`, hoursAgo: (h) => `${h} h ago`, daysAgo: (d) => `${d} d ago`,
     unavailable: 'Data unavailable', cannotLoad: 'Unable to load the data.',
-    refreshing: 'Refreshing…', refreshed: 'Data refreshed.', upToDate: (age) => `No new collection published${age ? `: last one ${age}` : ''}.`, refreshFailed: 'Refresh failed.',
     refreshError: 'Refresh failed: last valid data kept.',
     components: (n) => countWord(n, 'component'), globalStatus: 'Global status',
     incidents: 'Incidents', maintenances: 'Maintenances', models: 'Models', services: 'Services', componentsTitle: 'Components',
@@ -71,8 +68,8 @@ const T = {
     groups: { us: 'Providers · USA', eu: 'Providers · Europe', cn: 'Providers · China', cloud: 'Inference clouds and APIs', other: 'Others' },
     groupEmpty: 'No source tracked yet.',
     incidentStates: { investigating: 'investigating', identified: 'identified', monitoring: 'monitoring', 'en cours': 'in progress', in_progress: 'in progress', verifying: 'verifying', scheduled: 'scheduled' },
-    footCollect: 'Collection', footCollectText: 'Every 30 minutes by GitHub Actions. The data is published with the page, in the same deployment.',
-    footRefresh: 'Refresh', footRefreshText: 'The page reloads the data every 30 minutes, when returning to an old tab, or with the “Refresh” button.',
+    footCollect: 'Collection', footCollectText: 'Every 5 minutes by GitHub Actions. The data is published with the page, in the same deployment.',
+    footRefresh: 'Refresh', footRefreshText: 'The page reloads the data every 2 minutes and when returning to an old tab.',
     footRead: 'Reading', footReadText: 'Each expanded row gives the measured scope, the reading method, the freshness, the incidents, the components and the official page.',
     footUnknown: 'Unverified', footUnknownText: 'The source could not be read. It is never an “operational” by default.',
     footAbout: 'About this page', footSource: 'Source code and method per provider',
@@ -94,7 +91,6 @@ let query = '';
 let sortMode = 'severity';
 let refreshing = false;
 let lastAttemptAt = 0;
-let lastRefreshAt = null;
 let refreshTimer;
 
 const $ = (id) => document.getElementById(id);
@@ -223,9 +219,8 @@ function countButton(status, text, n) {
 function renderFreshness() {
   if (!data) return;
   const at = $('collected-at');
-  const refreshedAt = lastRefreshAt ?? data.generatedAt;
   const collectionAge = ageLabel(data.generatedAt);
-  at.textContent = t('freshness')(fmtDate(refreshedAt), fmtDate(data.generatedAt), collectionAge);
+  at.textContent = t('freshness')(fmtDate(data.generatedAt), collectionAge);
   const stale = Date.now() - new Date(data.generatedAt).getTime() > STALE_MS;
   const banner = $('stale');
   banner.hidden = !stale;
@@ -495,27 +490,15 @@ async function readStatusJson(response) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-// Retour visible du bouton : sans lui, un rechargement sans nouvelle collecte ne change rien à l'écran
-let statusTimer;
-function showRefreshStatus(text, autoClear = true) {
-  const status = $('refresh-status');
-  status.textContent = text;
-  clearTimeout(statusTimer);
-  if (autoClear) statusTimer = setTimeout(() => { status.textContent = ''; }, REFRESH_STATUS_MS);
-}
-
-async function refreshData(source) {
+async function refreshData() {
   if (refreshing) return;
   refreshing = true;
   lastAttemptAt = Date.now();
   scheduleRefresh(REFRESH_MS);
-  const button = $('refresh');
   const error = $('refresh-error');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  button.disabled = true;
-  button.setAttribute('aria-busy', 'true');
-  if (source === 'manual') showRefreshStatus(t('refreshing'), false);
+  $('providers').setAttribute('aria-busy', 'true');
 
   try {
     const res = await fetch('data/status.json', { cache: 'no-store', signal: controller.signal });
@@ -524,8 +507,7 @@ async function refreshData(source) {
     if (!validateStatusDocument(nextData)) throw new Error('format de données inattendu');
     if (data && Date.parse(nextData.generatedAt) < Date.parse(data.generatedAt)) throw new Error('données plus anciennes que celles affichées');
 
-    const changed = !data || nextData.generatedAt !== data.generatedAt;
-    if (changed) {
+    if (!data || nextData.generatedAt !== data.generatedAt) {
       const previousData = data;
       const openCards = captureOpenCards();
       data = nextData;
@@ -548,27 +530,23 @@ async function refreshData(source) {
       }
     }
 
-    lastRefreshAt = new Date().toISOString();
     renderFreshness();
     error.hidden = true;
     error.textContent = '';
-    if (source === 'manual') showRefreshStatus(changed ? t('refreshed') : t('upToDate')(ageLabel(data.generatedAt)));
   } catch {
     if (!data) resetUnavailable();
     error.textContent = t('refreshError');
     error.hidden = false;
-    if (source === 'manual') showRefreshStatus(t('refreshFailed'));
   } finally {
     clearTimeout(timeout);
     refreshing = false;
-    button.disabled = false;
-    button.setAttribute('aria-busy', 'false');
+    $('providers').setAttribute('aria-busy', 'false');
   }
 }
 
 function refreshIfDue() {
   const remaining = REFRESH_MS - (Date.now() - lastAttemptAt);
-  if (remaining <= 0) refreshData('automatic');
+  if (remaining <= 0) refreshData();
   else scheduleRefresh(remaining);
 }
 
@@ -624,12 +602,11 @@ $('sort').addEventListener('change', (e) => {
   renderOngoing();
   renderSections();
 });
-$('refresh').addEventListener('click', () => refreshData('manual'));
-window.addEventListener('online', () => refreshData('automatic'));
+window.addEventListener('online', () => refreshData());
 window.addEventListener('focus', refreshIfDue);
 window.addEventListener('pageshow', refreshIfDue);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') refreshIfDue();
 });
 setInterval(renderFreshness, FRESHNESS_MS);
-refreshData('startup');
+refreshData();
