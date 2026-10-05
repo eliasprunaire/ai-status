@@ -72,7 +72,7 @@ npm run serve
 
 Ouvrir ensuite [localhost:8080](http://localhost:8080).
 
-La sonde Mistral utilise la variable d’environnement `MISTRAL_API_KEY`. Sans clé, les autres collectes fonctionnent et Mistral reste non vérifié. Ne pas enregistrer la clé dans le dépôt. Chaque collecte avec une clé effectue un appel facturable à `ministral-3b-2512`, limité à 8 tokens de sortie, sans nouvelle tentative automatique. Voir les [tarifs Mistral](https://mistral.ai/pricing/api/).
+La sonde Mistral utilise la variable d’environnement `MISTRAL_API_KEY`. Sans clé, les autres collectes fonctionnent et Mistral reste non vérifié. Ne pas enregistrer la clé dans le dépôt. La sonde effectue au plus un appel facturable à `ministral-3b-2512` toutes les 30 minutes, limité à 8 tokens de sortie, sans nouvelle tentative automatique : tant que la dernière observation publiée est saine et a moins de 30 minutes, la collecte la reprend avec son heure d’origine (`source.reuse` dans `providers.json`). Un échec, une dégradation ou un document illisible déclenchent une nouvelle sonde. Voir les [tarifs Mistral](https://mistral.ai/pricing/api/).
 
 Pour lancer les tests, sans appel aux fournisseurs :
 

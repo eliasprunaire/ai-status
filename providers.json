@@ -103,7 +103,8 @@
     "statusUrl": "https://status.mistral.ai",
     "source": {
       "kind": "mistral_probe",
-      "url": "https://api.mistral.ai/v1/chat/completions"
+      "url": "https://api.mistral.ai/v1/chat/completions",
+      "reuse": { "url": "https://status.librenet.fr/data/status.json", "maxAgeMinutes": 30 }
     },
     "modelPattern": "^Ministral 3 3B",
     "scope": "Sonde de génération sur Ministral 3 3B via API Mistral ; autres modèles et services non testés",
