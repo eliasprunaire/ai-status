@@ -108,6 +108,8 @@ assert.equal(await dispatchReleaseTests(bot), null);
 const workflow = readFileSync(new URL('../.github/workflows/tests.yml', import.meta.url), 'utf8');
 const publisher = readFileSync(new URL('../.github/workflows/collect.yml', import.meta.url), 'utf8').split('\n  publish:\n')[1].split('\n  release-pr:\n')[0];
 assert.match(publisher, /pull-requests: write/, 'GitHub exige le droit PR en écriture pour marquer une PR publiée');
+const collectWorkflow = readFileSync(new URL('../.github/workflows/collect.yml', import.meta.url), 'utf8');
+assert.match(collectWorkflow, /  test:\n    uses: \.\/\.github\/workflows\/tests\.yml\n(?:    #[^\n]*\n)*    with:\n      expected_sha: \$\{\{ github\.sha \}\}\n/, 'la collecte passe son SHA au garde de tests.yml : un workflow_dispatch de collect.yml ne doit pas être refusé');
 const guard = workflow.match(/        run: \|\n([\s\S]*?)\n      - uses:/)[1].replace(/^          /gm, '');
 for (const [event, expected, actual, status] of [
   ['workflow_dispatch', sha, sha, 0],
