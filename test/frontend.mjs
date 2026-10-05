@@ -289,6 +289,15 @@ try {
     assert.equal(await page.locator('.card details').getAttribute('open'), '');
   });
 
+  await scenario([{ body: old }, { body: fresh }], async (page) => {
+    await page.getByText('Ancien fournisseur', { exact: true }).waitFor();
+    await page.locator('.card details summary').first().click();
+    assert.equal(await page.locator('.card details[open]').count(), 1);
+    await page.getByRole('button', { name: 'Rafraîchir' }).click();
+    await page.getByText('Nouveau fournisseur', { exact: true }).waitFor();
+    assert.equal(await page.locator('.card details[open]').count(), 1, 'carte ouverte conservée après de nouvelles données');
+  });
+
   const unchanged = statusDoc(new Date(NOW).toISOString(), 'Données inchangées');
   await scenario([{ body: unchanged }, { body: unchanged }], async (page) => {
     await page.getByText('Données inchangées', { exact: true }).waitFor();
