@@ -12,10 +12,13 @@ on:
 # Aucun droit par défaut : chaque job déclare le minimum
 permissions: {}
 
-# Une collecte à la fois par ref ; on met en file plutôt que d'annuler, pour ne jamais
-# interrompre un déploiement Pages en cours
+# Un run en attente est annulé par le suivant du même groupe. Un push porte la publication
+# des releases (publish, release-pr) : il a son groupe propre, par commit, pour que le
+# cron externe ne l'annule jamais. Les collectes périodiques (schedule, workflow_dispatch)
+# partagent un groupe : une en cours, la plus récente en attente. On met en file plutôt
+# que d'annuler un run en cours
 concurrency:
-  group: collect-${{ github.ref }}
+  group: collect-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'periodic' }}
   cancel-in-progress: false
 
 jobs:
@@ -68,6 +71,11 @@ jobs:
     needs: collect
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Un seul déploiement Pages à la fois, sans interrompre celui en cours (schéma officiel
+    # de GitHub Pages) : un push et une collecte périodique peuvent désormais tourner ensemble
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write

@@ -110,6 +110,8 @@ const publisher = readFileSync(new URL('../.github/workflows/collect.yml', impor
 assert.match(publisher, /pull-requests: write/, 'GitHub exige le droit PR en écriture pour marquer une PR publiée');
 const collectWorkflow = readFileSync(new URL('../.github/workflows/collect.yml', import.meta.url), 'utf8');
 assert.match(collectWorkflow, /  test:\n    uses: \.\/\.github\/workflows\/tests\.yml\n(?:    #[^\n]*\n)*    with:\n      expected_sha: \$\{\{ github\.sha \}\}\n/, 'la collecte passe son SHA au garde de tests.yml : un workflow_dispatch de collect.yml ne doit pas être refusé');
+assert.match(collectWorkflow, /\nconcurrency:\n  group: collect-\$\{\{ github\.ref \}\}-\$\{\{ github\.event_name == 'push' && github\.sha \|\| 'periodic' \}\}\n  cancel-in-progress: false\n/, 'un push a son groupe de concurrence par commit : une collecte périodique ne doit pas annuler son run (publication des releases)');
+assert.match(collectWorkflow, /  deploy:[\s\S]*?    concurrency:\n      group: pages\n      cancel-in-progress: false\n/, 'les déploiements Pages sont sérialisés sans interrompre celui en cours');
 const guard = workflow.match(/        run: \|\n([\s\S]*?)\n      - uses:/)[1].replace(/^          /gm, '');
 for (const [event, expected, actual, status] of [
   ['workflow_dispatch', sha, sha, 0],
