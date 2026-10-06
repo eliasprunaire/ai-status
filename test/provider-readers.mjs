@@ -86,6 +86,12 @@ for (const [id, mod, body] of [['perplexity', incidentio, perplexityProxy], ['op
   assert.equal(failed.providers[0].status, 'inconnu');
 }
 
+// Datadog : un incident en cours sans composant rattaché reste lisible, en dégradation
+const orphan = await read(datadog, dp, { ...dd, incidents: [{ ...incident, componentsAffected: [] }] });
+assert.equal(orphan.collect.state, 'ok');
+assert.equal(orphan.status, 'degradation');
+assert.equal(orphan.incidents.length, 1);
+
 // incident.io via l'endpoint JSON /proxy/<hôte> (fixtures réelles du 2026-10-06). summary.json de
 // ces pages tronque à 25 composants et omet les incidents : le proxy doit tout restituer
 const proxyProvider = (id, url, pageName, requiredComponents) => ({ id, name: id, group: 'us', scope: 's', scopeEn: 's', statusUrl: url, source: { kind: 'incidentio', format: 'proxy', url, pageName, requiredComponents } });

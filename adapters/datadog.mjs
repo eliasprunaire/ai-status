@@ -57,9 +57,10 @@ export async function collect(provider, get) {
     const end = optionalDate(e.resolvedDate);
     if (e.resolved !== (e.currentStatus === 'resolved') || e.resolved !== (end !== null) || (end && Date.parse(end) < Date.parse(start))) bad('résolution contradictoire');
     if (e.resolved) continue;
+    // Un incident en cours sans composant rattaché reste visible (dégradation) au lieu de rendre
+    // toute la page illisible au pire moment
     const refs = associated(e);
-    if (!refs.length) bad('incident sans composants');
-    const impact = worstOf(refs.map(c => c.status));
+    const impact = refs.length ? worstOf(refs.map(c => c.status)) : 'degradation';
     incidents.push({ title: e.title, state: e.currentStatus, impact: impact === 'operationnel' ? 'degradation' : impact, createdAt: start, updatedAt: optionalDate(e.lastModifiedAt), components: refs.map(c => c.name), url: `${provider.statusUrl.replace(/\/+$/, '')}/incidents/${encodeURIComponent(e.id)}` });
   }
   if (!Object.hasOwn(doc, 'maintenances')) bad('maintenances absentes');
@@ -71,7 +72,7 @@ export async function collect(provider, get) {
     const end = optionalDate(e.completedDate);
     if ((end && start && Date.parse(end) < Date.parse(start)) || (end && ['scheduled', 'in_progress'].includes(e.currentStatus))) bad('maintenance.date');
     if (['completed', 'canceled'].includes(e.currentStatus)) continue;
-    if (!associated(e).length) bad('maintenance sans composants');
+    associated(e);
     maintenances.push({ title: e.title, state: e.currentStatus, scheduledFor: start, scheduledUntil: null, url: `${provider.statusUrl.replace(/\/+$/, '')}/maintenances/${encodeURIComponent(e.id)}` });
   }
   return { indicator: null, components, incidents, maintenances };
