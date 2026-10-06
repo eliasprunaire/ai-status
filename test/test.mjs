@@ -931,7 +931,7 @@ assert.ok(validateStatusDocument(buildOutput([scopedProvider], scopedSettled, ne
 // 10. providers.json : cohérence des déclarations.
 const providers = JSON.parse(readFileSync(new URL('../providers.json', import.meta.url), 'utf8'));
 const kinds = new Set(['mistral_probe', 'incidentio', 'datadog', 'statuspage', 'alibaba', 'google', 'flashcat', 'xai', 'unavailable', 'instatus', 'betterstack', 'checkly', 'onlineornot', 'aws', 'azure', 'tencent', 'volcengine']);
-assert.strictEqual(providers.length, 23, 'les 23 identités fournisseur restent présentes');
+assert.strictEqual(providers.length, 24, 'les 24 identités fournisseur restent présentes');
 assert.strictEqual(new Set(providers.map((p) => p.id)).size, providers.length, 'ids fournisseurs dupliqués');
 for (const p of providers) {
   assert.ok(p.id && p.name && p.statusUrl && p.source?.kind && p.source?.url, `fournisseur incomplet : ${p.id}`);
