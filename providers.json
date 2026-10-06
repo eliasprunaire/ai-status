@@ -74,8 +74,8 @@
       "kind": "statuspage",
       "url": "https://status.cursor.com"
     },
-    "scope": "Client Cursor et ses modèles hébergés",
-    "scopeEn": "Cursor client and its hosted models"
+    "scope": "Client Cursor, agents et CLI ; la page ne publie aucun état par modèle",
+    "scopeEn": "Cursor client, agents and CLI; the page publishes no per-model status"
   },
   {
     "id": "perplexity",
@@ -164,15 +164,27 @@
   },
   {
     "id": "minimax",
-    "name": "MiniMax",
+    "name": "MiniMax (Chine)",
     "group": "cn",
     "statusUrl": "https://status.minimaxi.com",
     "source": {
       "kind": "statuspage",
       "url": "https://status.minimaxi.com"
     },
-    "scope": "API MiniMax (LLM, voix, vidéo)",
-    "scopeEn": "MiniMax API (LLM, voice, video)"
+    "scope": "Plateforme Chine (api.minimaxi.com) : LLM, voix, vidéo",
+    "scopeEn": "China platform (api.minimaxi.com): LLM, voice, video"
+  },
+{
+    "id": "minimax-intl",
+    "name": "MiniMax (international)",
+    "group": "cn",
+    "statusUrl": "https://status.minimax.io",
+    "source": {
+      "kind": "statuspage",
+      "url": "https://status.minimax.io"
+    },
+    "scope": "Plateforme internationale (api.minimax.io) : LLM, voix, vidéo",
+    "scopeEn": "International platform (api.minimax.io): LLM, voice, video"
   },
   {
     "id": "tencent-hunyuan",
