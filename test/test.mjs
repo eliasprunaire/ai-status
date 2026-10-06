@@ -793,6 +793,26 @@ try {
   );
   assert.deepStrictEqual(requests.map((request) => request.redirect), ['manual', 'manual']);
 
+  // Une seule nouvelle tentative, sur 429/5xx/réseau uniquement, dans le délai total
+  let calls = 0;
+  globalThis.fetch = async () => (++calls === 1 ? new Response('x', { status: 503, headers: { 'Retry-After': '0' } }) : new Response('{"ok":true}'));
+  assert.deepStrictEqual(await httpGet('https://source.test/data'), { ok: true }, '503 isolé : relu une fois');
+  assert.strictEqual(calls, 2);
+  calls = 0;
+  globalThis.fetch = async () => { calls++; return new Response('x', { status: 503, headers: { 'Retry-After': '0' } }); };
+  await assert.rejects(httpGet('https://source.test/data'), (error) => error.code === 'http' && error.status === 503);
+  assert.strictEqual(calls, 2, 'jamais plus de deux essais');
+  calls = 0;
+  globalThis.fetch = async () => { calls++; return new Response('x', { status: 404 }); };
+  await assert.rejects(httpGet('https://source.test/data'), (error) => error.status === 404);
+  assert.strictEqual(calls, 1, 'pas de nouvelle tentative hors 429/5xx');
+  calls = 0;
+  globalThis.fetch = async () => { calls++; return new Response('x', { status: 503 }); };
+  await assert.rejects(httpGet('https://source.test/data', { timeoutMs: 1500 }), (error) => error.status === 503);
+  assert.strictEqual(calls, 1, 'pas de nouvelle tentative qui dépasserait le délai total');
+  globalThis.fetch = async () => new Response('<!DOCTYPE html><title>Just a moment</title>', { headers: { 'Content-Type': 'text/html' } });
+  await assert.rejects(httpGet('https://source.test/data'), (error) => error.code === 'schema' && /non JSON \(text\/html/.test(error.detail), 'page HTML : schéma, pas réseau');
+
   const expectedBytes = new Uint8Array([0xff, 0xfe, 0x7b, 0x00]);
   globalThis.fetch = async () => new Response(expectedBytes);
   assert.deepStrictEqual(await httpGet('https://source.test/data', { as: 'bytes' }), expectedBytes);
