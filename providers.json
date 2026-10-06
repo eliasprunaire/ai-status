@@ -336,7 +336,8 @@
       "url": "https://health.aws.amazon.com/health/status",
       "eventsUrl": "https://health.aws.amazon.com/public/currentevents",
       "servicesUrl": "https://servicedata-eu-west-1-prod.s3.amazonaws.com/services.json",
-      "serviceName": "Amazon Bedrock"
+      "serviceName": "Amazon Bedrock",
+      "maxResponseBytes": 8388608
     },
     "scope": "Amazon Bedrock, une entrée par région AWS ; pas les autres services AWS",
     "scopeEn": "Amazon Bedrock, one entry per AWS region; not other AWS services"
