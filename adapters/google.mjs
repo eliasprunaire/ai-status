@@ -43,10 +43,12 @@ export async function collect(provider, get) {
       affectedIds.add(product.id);
     }
     if (incident.end !== null) continue;
-    if ([...affectedIds].some((id) => !catalog.has(id))) throw fail('scope', 'incidents.json (affected_products.id)');
+    // Produit absent du catalogue : ignoré s'il est hors périmètre ; s'il porte un titre du
+    // périmètre (nouveau produit Vertex / Gemini), illisible plutôt qu'ignoré
+    if (incident.affected_products.some((product) => !catalog.has(product.id) && inScope(product.title))) throw fail('scope', 'incidents.json (produit du périmètre absent du catalogue)');
     const productIds = [...affectedIds].filter((id) => scopedById.has(id));
     const impact = normalizeGoogleImpact(incident.status_impact);
-    if (productIds.length === 0 || impact === null) continue;
+    if (productIds.length === 0) continue;
     for (const id of productIds) statusById.get(id).push(impact);
     ongoing.push({
       title: incident.external_desc ?? incident.service_name ?? 'incident',
