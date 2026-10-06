@@ -15,12 +15,8 @@ import * as google from '../adapters/google.mjs';
 import * as flashcat from '../adapters/flashcat.mjs';
 import * as unavailable from '../adapters/unavailable.mjs';
 import * as xai from '../adapters/xai.mjs';
-import * as instatus from '../adapters/instatus.mjs';
-import { instatusComponentStatus } from '../adapters/instatus.mjs';
 import * as betterstack from '../adapters/betterstack.mjs';
 import * as checkly from '../adapters/checkly.mjs';
-import * as onlineornot from '../adapters/onlineornot.mjs';
-import { decodeTurboStream, parseOnlineornotHtml } from '../adapters/onlineornot.mjs';
 import * as aws from '../adapters/aws.mjs';
 import { awsCode } from '../adapters/aws.mjs';
 import * as azure from '../adapters/azure.mjs';
@@ -359,34 +355,6 @@ for (const invalidFeed of [
   assert.strictEqual(failed.collect.state, 'error');
 }
 
-// 7b. Instatus (Perplexity) : fixture réelle, tout OPERATIONAL ; états dégradés ; réponses cassées.
-const iProvider = { ...provider, statusUrl: 'https://status.perplexity.com', source: { kind: 'instatus', url: 'https://status.perplexity.com' } };
-const i1 = await read(instatus, iProvider, byUrl({ 'summary.json': fixture('instatus-perplexity-summary.json'), 'components.json': fixture('instatus-perplexity-components.json') }));
-assert.strictEqual(i1.status, 'operationnel');
-assert.deepStrictEqual(names(i1.components), ['Website', 'API', 'Computer']);
-assert.strictEqual(i1.collect.state, 'ok');
-const i2 = await read(instatus, iProvider, byUrl({
-  'summary.json': { page: { status: 'HASISSUES' }, activeIncidents: [{ name: 'API errors', status: 'INVESTIGATING', impact: 'PARTIALOUTAGE', started: '2026-09-04T10:00:00Z', url: 'https://status.perplexity.com/incident/x' }], activeMaintenances: [] },
-  'components.json': { components: [{ name: 'API', status: 'PARTIALOUTAGE' }, { name: 'Website', status: 'OPERATIONAL' }] },
-}));
-assert.strictEqual(i2.status, 'degradation');
-assert.deepStrictEqual(impacted(i2.components), ['API']);
-assert.strictEqual(i2.incidents[0].status, 'investigating');
-const i3 = await read(instatus, iProvider, byUrl({ 'summary.json': { page: { status: 'UP' }, activeIncidents: null, activeMaintenances: null }, 'components.json': { components: [{ name: 'API', status: 'WEIRD' }] } }));
-assert.strictEqual(i3.status, 'inconnu', 'vocabulaire inconnu → jamais vert');
-assert.strictEqual(instatusComponentStatus('MAJOROUTAGE'), 'incident_majeur');
-assert.strictEqual(instatusComponentStatus('__proto__'), 'inconnu');
-assert.strictEqual((await read(instatus, iProvider, byUrl({
-  'summary.json': { page: { status: 'UP' }, activeIncidents: [{ name: 'X', status: 'INVENTED' }], activeMaintenances: [] },
-  'components.json': { components: [{ name: 'API', status: 'OPERATIONAL' }] },
-}))).status, 'inconnu', 'un état actif inconnu est rejeté');
-for (const map of [{ 'summary.json': { page: { status: 'UP' } }, 'components.json': { components: [] } }, { 'summary.json': {}, 'components.json': { components: [{ name: 'API', status: 'OPERATIONAL' }] } }, { 'summary.json': { page: { status: 'UP' } } }]) {
-  const i = await read(instatus, iProvider, byUrl(map));
-  assert.strictEqual(i.status, 'inconnu', `payload ${JSON.stringify(map)}`);
-  assert.strictEqual(i.collect.state, 'error');
-}
-assert.strictEqual((await read(instatus, iProvider, failing)).status, 'inconnu');
-
 // 7c. Better Stack (Together AI) : fixture réelle ; rapport ouvert ; ressource non surveillée ; cassé.
 const bProvider = { ...provider, statusUrl: 'https://status.together.ai', source: { kind: 'betterstack', url: 'https://status.together.ai' } };
 const together = fixture('betterstack-together-index.json');
@@ -479,81 +447,6 @@ assert.strictEqual((await read(checkly, cProvider, cMap([{ id: 'bad-ref', name: 
 assert.strictEqual((await read(checkly, cProvider, cMap([{ id: 'bad-state', name: 'X', severity: 'MINOR', lastUpdateStatus: 'INVENTED', services: [] }]))).status, 'inconnu');
 assert.strictEqual((await read(checkly, cProvider, cMap([{ id: 'bad-severity', name: 'X', severity: '__proto__', lastUpdateStatus: 'INVESTIGATING', services: [{ id: chatId }] }]))).status, 'inconnu', 'une propriété héritée ne devient jamais opérationnelle');
 assert.strictEqual((await read(checkly, cProvider, cMap(Array(STATUS_LIMITS.events + 1).fill({ lastUpdateStatus: 'RESOLVED' })))).status, 'inconnu', 'les incidents sont bornés avant rattachement');
-
-// 7e. OnlineOrNot (OpenRouter) : décodage turbo-stream ; fixture HTML réelle ; composant dégradé ; page sans données.
-assert.deepStrictEqual(decodeTurboStream([{ _1: 2, _3: 4 }, 'a', 5, 'b', [6, -5], ['D', 7], '2026-09-04T00:00:00Z']), { a: 5, b: ['2026-09-04T00:00:00Z', null] });
-assert.throws(() => decodeTurboStream([{ _1: 2 }, '__proto__', 5]), (error) => error.code === 'schema', 'les clés de prototype sont refusées');
-const oProvider = { ...provider, statusUrl: 'https://status.openrouter.ai', source: { kind: 'onlineornot', url: 'https://status.openrouter.ai' } };
-const orHtml = fixtureText('onlineornot-openrouter.html');
-const orDoc = parseOnlineornotHtml(orHtml);
-assert.strictEqual(orDoc.loaderData.root.result.statusPage.name, 'OpenRouter');
-const o1 = await read(onlineornot, oProvider, okText(orHtml));
-assert.strictEqual(o1.status, 'operationnel');
-assert.strictEqual(o1.components.length, 10);
-assert.ok(names(o1.components).includes('Chat (/api/v1/chat/completions)'));
-assert.deepStrictEqual(o1.incidents, [], 'incidents terminés (ended non null) ignorés');
-// Encodeur turbo-stream minimal pour fabriquer les cas observés et les alias de graphe
-const turbo = (root) => {
-  const flat = [];
-  const seen = new Map();
-  const enc = (v) => {
-    if (v && typeof v === 'object' && seen.has(v)) return seen.get(v);
-    const i = flat.push(null) - 1;
-    if (v && typeof v === 'object') seen.set(v, i);
-    if (Array.isArray(v)) flat[i] = v.map(enc);
-    else if (v && typeof v === 'object') flat[i] = Object.fromEntries(Object.entries(v).map(([k, x]) => [`_${enc(k)}`, enc(x)]));
-    else flat[i] = v;
-    return i;
-  };
-  enc(root);
-  return `<html><body><script>window.__reactRouterContext.streamController.enqueue(${JSON.stringify(JSON.stringify(flat))});</script></body></html>`;
-};
-const onlineHtml = (components, incidents = {}, activeIncidents = []) => turbo({ loaderData: {
-  root: { result: { components } },
-  'routes/_index': { result: { incidents, activeIncidents } },
-} });
-const activeOnlineIncident = { id: 'abc', title: 'Chat down', impact: 'MAJOR_OUTAGE', started: '2026-09-04T10:00:00Z', ended: null, updates: [{ status: 'INVESTIGATING', createdAt: '2026-09-04T10:01:00Z' }] };
-const degradedHtml = onlineHtml(
-  [{ name: 'Chat (/api/v1/chat/completions)', status: 'MAJOR_OUTAGE' }, { name: 'Models', status: 'OPERATIONAL' }],
-  { '2026-09-04T00:00:00.000Z': [activeOnlineIncident] },
-  [activeOnlineIncident],
-);
-const o2 = await read(onlineornot, oProvider, okText(degradedHtml));
-assert.strictEqual(o2.status, 'incident_majeur');
-assert.deepStrictEqual(impacted(o2.components), ['Chat (/api/v1/chat/completions)']);
-assert.strictEqual(o2.incidents.length, 1);
-assert.strictEqual(o2.incidents[0].status, 'investigating');
-assert.strictEqual(o2.incidents[0].url, 'https://status.openrouter.ai/incidents/abc');
-const o3 = await read(onlineornot, oProvider, okText(orHtml.replace(/OPERATIONAL/g, 'WEIRD')));
-assert.strictEqual(o3.status, 'inconnu', 'vocabulaire inconnu → jamais vert');
-const o4 = await read(onlineornot, oProvider, okText('<html><body>Page not found</body></html>'));
-assert.strictEqual(o4.status, 'inconnu');
-assert.ok(/SSR/.test(o4.collect.error));
-assert.strictEqual((await read(onlineornot, oProvider, httpFail(502))).status, 'inconnu');
-const sharedIncidents = [{ id: 'alias', title: 'Alias', ended: null, updates: [] }];
-const o5 = await read(onlineornot, oProvider, okText(onlineHtml(
-  [{ name: 'Models', status: 'OPERATIONAL' }],
-  { first: sharedIncidents, second: sharedIncidents },
-)));
-assert.strictEqual(o5.status, 'inconnu', 'un tableau d’incidents aliasé est rejeté avant expansion');
-const sharedComponent = { name: 'x'.repeat(60_000), status: 'OPERATIONAL' };
-const o6 = await read(onlineornot, oProvider, okText(onlineHtml([sharedComponent, sharedComponent])));
-assert.strictEqual(o6.status, 'inconnu', 'des composants aliasés ne dépassent pas le budget fournisseur');
-assert.match(o6.collect.error, /^schéma inattendu/);
-assert.strictEqual((await read(onlineornot, oProvider, okText(onlineHtml([{ name: 'Models', status: 'OPERATIONAL' }, { name: 'Models', status: 'OPERATIONAL' }])))).status, 'inconnu', 'deux composants de même identité sont rejetés');
-assert.strictEqual((await read(onlineornot, oProvider, okText(onlineHtml([null])))).status, 'inconnu', 'aucun composant mal formé n’est supprimé silencieusement');
-assert.strictEqual((await read(onlineornot, oProvider, okText(turbo({ loaderData: { root: { result: { components: [{ name: 'Models', status: 'OPERATIONAL' }] } }, 'routes/_index': { result: {} } } })))).status, 'inconnu', 'le dataset incidents doit être explicitement présent');
-assert.strictEqual((await read(onlineornot, oProvider, okText(turbo({ loaderData: { root: { result: { components: [{ name: 'Models', status: 'OPERATIONAL' }] } }, 'routes/_index': { result: { incidents: {} } } } })))).status, 'inconnu', 'le dataset activeIncidents doit être explicitement présent');
-assert.strictEqual((await read(onlineornot, oProvider, okText(onlineHtml([{ name: 'Models', status: 'OPERATIONAL' }], { today: [{ title: 'X', ended: 'jamais', updates: [] }] })))).status, 'inconnu', 'une fin invalide ne masque pas un incident');
-const invalidActive = { ...activeOnlineIncident, id: 'bad-state', updates: [{ status: 'INVENTED' }] };
-assert.strictEqual((await read(onlineornot, oProvider, okText(onlineHtml([{ name: 'Models', status: 'OPERATIONAL' }], { today: [invalidActive] }, [invalidActive])))).status, 'inconnu', 'un état actif inconnu est rejeté');
-const unknownImpact = { ...activeOnlineIncident, id: 'bad-impact', impact: 'INVENTED' };
-assert.strictEqual((await read(onlineornot, oProvider, okText(onlineHtml([{ name: 'Models', status: 'OPERATIONAL' }], { today: [unknownImpact] }, [unknownImpact])))).status, 'inconnu', 'un impact actif inconnu ne peut jamais rester vert');
-const genericUpdate = { ...activeOnlineIncident, id: 'generic-update', impact: 'NO_IMPACT', updates: [{ status: 'UPDATE', createdAt: '2026-09-04T10:01:00Z' }] };
-assert.strictEqual((await read(onlineornot, oProvider, okText(onlineHtml([{ name: 'Models', status: 'OPERATIONAL' }], { today: [genericUpdate] }, [genericUpdate])))).status, 'degradation', 'une mise à jour active documentée ne peut pas rester verte');
-const noImpactField = { ...activeOnlineIncident, id: 'no-impact-field' };
-delete noImpactField.impact;
-assert.strictEqual((await read(onlineornot, oProvider, okText(onlineHtml([{ name: 'Models', status: 'OPERATIONAL' }], { today: [noImpactField] }, [noImpactField])))).status, 'degradation', 'le SSR public sans impact conserve le plancher incident');
 
 // 7f. AWS (Bedrock) : codes ; fixture réelle en UTF-16 (deux régions ME disrupted) ; tout calme ; cassé.
 assert.strictEqual(awsCode('0'), 'operationnel');
@@ -971,7 +864,7 @@ assert.ok(validateStatusDocument(buildOutput([scopedProvider], scopedSettled, ne
 
 // 10. providers.json : cohérence des déclarations.
 const providers = JSON.parse(readFileSync(new URL('../providers.json', import.meta.url), 'utf8'));
-const kinds = new Set(['mistral_probe', 'incidentio', 'datadog', 'statuspage', 'alibaba', 'google', 'flashcat', 'xai', 'unavailable', 'instatus', 'betterstack', 'checkly', 'onlineornot', 'aws', 'azure', 'tencent', 'volcengine']);
+const kinds = new Set(['mistral_probe', 'incidentio', 'datadog', 'statuspage', 'alibaba', 'google', 'flashcat', 'xai', 'unavailable', 'betterstack', 'checkly', 'aws', 'azure', 'tencent', 'volcengine']);
 assert.strictEqual(providers.length, 24, 'les 24 identités fournisseur restent présentes');
 assert.strictEqual(new Set(providers.map((p) => p.id)).size, providers.length, 'ids fournisseurs dupliqués');
 for (const p of providers) {

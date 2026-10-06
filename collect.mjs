@@ -9,11 +9,9 @@ import * as alibaba from './adapters/alibaba.mjs';
 import * as google from './adapters/google.mjs';
 import * as flashcat from './adapters/flashcat.mjs';
 import * as xai from './adapters/xai.mjs';
-import * as instatus from './adapters/instatus.mjs';
 import * as betterstack from './adapters/betterstack.mjs';
 import * as mistral_probe from './adapters/mistral-probe.mjs';
 import * as checkly from './adapters/checkly.mjs';
-import * as onlineornot from './adapters/onlineornot.mjs';
 import * as aws from './adapters/aws.mjs';
 import * as azure from './adapters/azure.mjs';
 import * as tencent from './adapters/tencent.mjs';
@@ -30,7 +28,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const providers = JSON.parse(readFileSync(path.join(root, 'providers.json'), 'utf8'));
 
 // Famille de source (providers.json, source.kind) → module adaptateur
-const ADAPTERS = { mistral_probe, datadog, incidentio, statuspage, alibaba, google, flashcat, xai, instatus, betterstack, checkly, onlineornot, aws, azure, tencent, volcengine, unavailable };
+const ADAPTERS = { mistral_probe, datadog, incidentio, statuspage, alibaba, google, flashcat, xai, betterstack, checkly, aws, azure, tencent, volcengine, unavailable };
 
 const now = new Date().toISOString();
 const settled = await collectAll(providers, ADAPTERS, get);
