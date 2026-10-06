@@ -3,6 +3,7 @@ node_modules/
 *.log
 # Généré par node collect.mjs, publié comme artefact Pages (jamais versionné)
 public/data/status.json
+public/data/health.json
 # Glossaire et spécifications de travail locaux, non versionnés
 CONTEXT.md
 .scratch/

@@ -22,6 +22,7 @@ import * as unavailable from './adapters/unavailable.mjs';
 import { get } from './lib/http.mjs';
 import { writeBuildInfo } from './scripts/build-info.mjs';
 import { collectAll, buildOutput } from './lib/collect.mjs';
+import { computeHealth } from './lib/health.mjs';
 import { assertStatusDocument, MAX_STATUS_BYTES } from './public/status-contract.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -48,6 +49,16 @@ renameSync(tempPath, outPath);
 console.log(`écrit ${outPath} (${out.providers.length} fournisseurs)`);
 const ok = out.providers.filter((p) => p.collect.state === 'ok').length;
 console.log(`collecte ok : ${ok}/${out.providers.length} ; pire état : ${out.summary.worst}`);
+
+// Surveillance entre deux collectes : mémoire publiée avec la page (data/health.json),
+// relue ici. Illisible ou absente (premier run) : aucune alerte de structure, nouvelle base
+const site = (process.env.STATUS_SITE_URL ?? 'https://status.librenet.fr').replace(/\/+$/, '');
+let previousHealth = null;
+try { previousHealth = await get(`${site}/data/health.json?t=${Date.now()}`); } catch { previousHealth = null; }
+const { health, alerts } = computeHealth(previousHealth, out, providers);
+writeFileSync(path.join(root, 'public', 'data', 'health.json'), JSON.stringify(health) + '\n');
+for (const alert of alerts) console.log(`alerte ${alert.type} : ${alert.id}`);
+if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `alerts=${JSON.stringify(alerts)}\n`);
 
 // Observabilité : chaque fournisseur non lu devient un avertissement visible dans le run
 // GitHub Actions, avec un tableau récapitulatif. Les sources déclarées « unavailable »
