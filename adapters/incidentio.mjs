@@ -89,31 +89,53 @@ export function parseSummary(html) {
   return summaries[0];
 }
 
+// Deux accès au même résumé : la page HTML (enveloppe Flight) ou l'endpoint JSON public
+// /proxy/<hôte> (source.format = 'proxy'). Ne pas utiliser /api/v2/summary.json de ces pages :
+// l'émulation Statuspage d'incident.io tronque les composants à 25 et omet les incidents
+async function readSummary(provider, get) {
+  if (provider.source.format !== 'proxy') return parseSummary(await get(provider.source.url, { as: 'text' }));
+  const base = new URL(provider.source.url);
+  const data = await get(`${base.origin}/proxy/${base.host}`);
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !data.summary || typeof data.summary !== 'object' || Array.isArray(data.summary)) bad('summary');
+  return data.summary;
+}
+
 export async function collect(provider, get) {
-  const s = parseSummary(await get(provider.source.url, { as: 'text' }));
+  const s = await readSummary(provider, get);
   const now = Date.now();
-  if (s.name !== provider.source.pageName || !text(s.id) || s.page_type !== 'standalone' || typeof s.public_url !== 'string' || s.public_url.replace(/\/+$/, '') !== provider.statusUrl.replace(/\/+$/, '')) bad('identité');
+  if ((provider.source.pageName !== undefined && s.name !== provider.source.pageName) || !text(s.id) || s.page_type !== 'standalone' || typeof s.public_url !== 'string' || s.public_url.replace(/\/+$/, '') !== provider.statusUrl.replace(/\/+$/, '')) bad('identité');
   for (const key of ['next', 'next_page', 'nextCursor', 'pagination']) if (s[key] != null && s[key] !== '$undefined') bad('pagination');
-  const byId = new Map();
+  const all = new Map();
   for (const c of list(s.components, STATUS_LIMITS.components)) {
-    if (!c || !text(c.id) || !text(c.name) || c.status_page_id !== s.id || byId.has(c.id)) bad('composant');
-    byId.set(c.id, { name: c.name, status: 'operationnel' });
+    if (!c || !text(c.id) || !text(c.name) || c.status_page_id !== s.id || all.has(c.id)) bad('composant');
+    all.set(c.id, c.name.trim());
   }
-  if (!byId.size) bad('aucun composant');
-  if (provider.source.requiredComponents?.some(name => ![...byId.values()].some(c => c.name === name))) bad('couverture');
-  const visible = new Set();
+  // Seuls les composants affichés par la page officielle (structure, groupes compris, non
+  // masqués) sont suivis ; un même nom dans deux groupes est préfixé par son groupe
+  const shown = [];
   for (const item of list(s.structure?.items, STATUS_LIMITS.components)) {
-    const c = item?.component;
-    if (!c || !byId.has(c.component_id) || c.name !== byId.get(c.component_id).name || visible.has(c.component_id) || c.hidden !== false) bad('structure');
-    visible.add(c.component_id);
+    // Dans l'enveloppe Flight, une valeur absente est codée « $undefined »
+    const group = item?.group == null || item.group === '$undefined' ? null : item.group;
+    const entries = group ? list(group.components, STATUS_LIMITS.components).map(c => [c, group]) : [[item?.component, null]];
+    if (group && (!text(group.name) || typeof group.hidden !== 'boolean')) bad('structure');
+    for (const [c, parent] of entries) {
+      if (!c || !all.has(c.component_id) || c.name.trim() !== all.get(c.component_id) || shown.some(e => e.id === c.component_id) || typeof c.hidden !== 'boolean') bad('structure');
+      if (!c.hidden && !parent?.hidden) shown.push({ id: c.component_id, name: all.get(c.component_id), group: parent?.name.trim() ?? null });
+    }
   }
-  if (visible.size !== byId.size) bad('couverture');
+  if (!shown.length) bad('aucun composant');
+  if (provider.source.requiredComponents?.some(name => !shown.some(c => c.name === name))) bad('couverture');
+  const byId = new Map();
+  for (const c of shown) {
+    const duplicate = shown.filter(other => other.name === c.name).length > 1;
+    byId.set(c.id, { name: duplicate && c.group ? `${c.group} · ${c.name}` : c.name, status: 'operationnel' });
+  }
   const refs = (values) => {
     const seen = new Set();
-    return list(values, STATUS_LIMITS.eventComponents).map(c => {
-      if (!c || !byId.has(c.component_id) || seen.has(c.component_id) || !text(c.status)) bad('association');
+    return list(values, STATUS_LIMITS.eventComponents).flatMap(c => {
+      if (!c || !all.has(c.component_id) || seen.has(c.component_id) || !text(c.status)) bad('association');
       seen.add(c.component_id);
-      return { id: c.component_id, name: byId.get(c.component_id).name, status: mapped(c.status) };
+      return byId.has(c.component_id) ? [{ id: c.component_id, name: byId.get(c.component_id).name, status: mapped(c.status) }] : [];
     });
   };
   // Le lecteur officiel utilise affected_components pour l'état courant, pas l'historique
@@ -131,13 +153,19 @@ export async function collect(provider, get) {
     seen.add(e.id);
     const associated = refs(e.affected_components);
     const activeImpacts = [];
+    const starts = [];
+    const ends = [];
     for (const impact of list(e.component_impacts, STATUS_LIMITS.events)) {
-      if (!byId.has(impact?.component_id) || !text(impact.status)) bad('impact');
+      if (!all.has(impact?.component_id) || !text(impact.status)) bad('impact');
       const start = date(impact.start_at);
       const end = impact.end_at == null || impact.end_at === '$undefined' ? null : date(impact.end_at);
       if (end && Date.parse(end) < Date.parse(start)) bad('impact.date');
+      starts.push(start);
+      ends.push(end);
       if (Date.parse(start) <= now && (!end || Date.parse(end) > now)) activeImpacts.push(mapped(impact.status));
     }
+    const first = starts.length ? starts.reduce((a, b) => Date.parse(a) < Date.parse(b) ? a : b) : null;
+    const last = ends.length && ends.every(Boolean) ? ends.reduce((a, b) => Date.parse(a) > Date.parse(b) ? a : b) : null;
     const createdAt = date(e.published_at);
     const updates = list(e.updates, STATUS_LIMITS.events);
     const times = updates.map(u => date(u.published_at));
@@ -147,11 +175,13 @@ export async function collect(provider, get) {
     const url = `${provider.statusUrl.replace(/\/+$/, '')}/incidents/${encodeURIComponent(e.id)}`;
     if (e.type === 'maintenance') {
       if (e.status !== (scheduled ? 'maintenance_scheduled' : 'maintenance_in_progress')) bad('maintenance.status');
-      maintenances.push({ title: e.name, state: scheduled ? 'scheduled' : 'in_progress', scheduledFor: null, scheduledUntil: null, url });
+      // Une maintenance planifiée dont la fenêtre est entièrement passée n'est plus affichée
+      if (scheduled && last && Date.parse(last) <= now) continue;
+      maintenances.push({ title: e.name.trim(), state: scheduled ? 'scheduled' : 'in_progress', scheduledFor: first, scheduledUntil: last, url });
     } else {
       if (scheduled || e.type !== 'incident' || !['investigating', 'identified', 'monitoring'].includes(e.status)) bad('incident.status');
       const impact = worstOf(activeImpacts);
-      incidents.push({ title: e.name, state: e.status, impact: impact === 'operationnel' ? 'degradation' : impact, createdAt, updatedAt, components: associated.map(c => c.name), url });
+      incidents.push({ title: e.name.trim(), state: e.status, impact: impact === 'operationnel' ? 'degradation' : impact, createdAt, updatedAt, components: associated.map(c => c.name), url });
     }
   }
   return { indicator: null, components: [...byId.values()], incidents, maintenances };

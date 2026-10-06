@@ -191,7 +191,10 @@ assert.strictEqual(s7.status, 'maintenance');
 assert.deepStrictEqual(impacted(s7.components), ['API']);
 assert.strictEqual((await read(statuspage, provider, okJson({ status: { indicator: 'none' }, components: [{ name: 'API', status: 'operational' }], incidents: [{ name: 'X', status: 'invented' }], scheduled_maintenances: [] }))).status, 'inconnu');
 assert.strictEqual((await read(statuspage, provider, okJson({ status: { indicator: 'none' }, components: [{ name: 'API', status: 'operational' }], incidents: [], scheduled_maintenances: [{ name: 'X', status: 'invented' }] }))).status, 'inconnu');
-assert.strictEqual((await read(statuspage, provider, okJson({ status: { indicator: 'none' }, components: [{ name: 'API', status: 'operational' }] }))).status, 'operationnel', 'Statuspage omet actuellement les tableaux vides');
+assert.strictEqual((await read(statuspage, provider, okJson({ status: { indicator: 'none' }, components: [{ name: 'API', status: 'operational' }] }))).status, 'inconnu', 'tableaux d’événements absents (émulation incident.io) : jamais vert');
+const sMajor = await read(statuspage, provider, okJson({ status: { indicator: 'minor' }, components: [{ name: 'API', status: 'operational' }], incidents: [{ name: 'X', status: 'identified', impact: 'major', components: [] }], scheduled_maintenances: [] }));
+assert.strictEqual(sMajor.status, 'incident_majeur', 'impact « major » d’un incident : incident majeur, plus une simple dégradation');
+assert.strictEqual(sMajor.incidents[0].impact, 'incident_majeur');
 assert.strictEqual((await read(statuspage, provider, okJson({ status: { indicator: 'none' }, components: [{ name: 'API', status: 'operational' }], incidents: {} }))).status, 'inconnu', 'un tableau présent mais mal formé reste rejeté');
 
 // 4. Google : flux officiels, périmètre par préfixe.
@@ -896,11 +899,11 @@ for (const doc of [
   { ...scopedHealthy, components: [...scopedHealthy.components, ...scopedHealthy.components] },
   { ...scopedHealthy, incidents: undefined },
   { ...scopedHealthy, scheduled_maintenances: undefined },
-  { ...scopedHealthy, incidents: [{ ...scopedEvent, components: [] }] },
   { ...scopedHealthy, incidents: [{ ...scopedEvent, components: [{ name: 'Replicate' }] }] },
   { ...scopedHealthy, scheduled_maintenances: [{ ...scopedEvent, status: 'in_progress', components: null }] },
   { ...scopedHealthy, components: [{ ...scopedHealthy.components[0], status: 'NEW' }] },
 ]) assert.strictEqual((await read(statuspage, scopedProvider, okJson(doc))).status, 'inconnu');
+assert.strictEqual((await read(statuspage, scopedProvider, okJson({ ...scopedHealthy, incidents: [{ ...scopedEvent, components: [] }] }))).status, 'operationnel', 'incident Cloudflare sans composant : hors périmètre Replicate, plus « non vérifié »');
 assert.strictEqual((await read(statuspage, scopedProvider, httpFail(403))).status, 'inconnu');
 const scopedSettled = await collectAll([scopedProvider], { statuspage }, okJson(scopedHealthy));
 assert.ok(validateStatusDocument(buildOutput([scopedProvider], scopedSettled, new Date().toISOString(), { statuspage }), [scopedProvider]));
@@ -921,9 +924,11 @@ for (const p of providers) {
   if (p.source.kind === 'xai') {
     assert.strictEqual(p.id, 'xai', 'seul xAI utilise ce flux RSS');
     assert.strictEqual(p.source.url, 'https://status.x.ai/feed.xml');
-    assert.deepStrictEqual(p.source.components, xaiComponents, 'les 13 composants xAI restent stables et ordonnés');
+    assert.deepStrictEqual(p.source.components, xaiComponents, 'composants xAI déclarés stables et ordonnés');
   }
-  if (['incidentio', 'datadog'].includes(p.source.kind)) assert.ok(p.source.pageName && p.source.requiredComponents?.length, `couverture manquante : ${p.id}`);
+  // Exception : une page faite uniquement de modèles (modelPattern « . ») change de catalogue
+  // trop souvent pour imposer un composant ; « aucun composant » reste une erreur
+  if (['incidentio', 'datadog'].includes(p.source.kind)) assert.ok(p.source.pageName && (p.source.requiredComponents?.length || p.modelPattern === '.'), `couverture manquante : ${p.id}`);
   if (p.source.kind === 'checkly') assert.ok(p.source.slug, `slug manquant : ${p.id}`);
   if (p.source.kind === 'aws') assert.ok(p.source.eventsUrl && p.source.servicesUrl && p.source.serviceName, `source aws incomplète : ${p.id}`);
   if (p.source.kind === 'azure') assert.ok(p.source.services?.length, `services manquants : ${p.id}`);
