@@ -153,8 +153,8 @@
     "source": {
       "kind": "unavailable",
       "url": "https://status.zhipuai.cn",
-      "note": "Page de statut inaccessible depuis l'extérieur de la Chine (connexion filtrée, vérifié depuis la CI). Aucune requête n'est tentée.",
-      "noteEn": "Status page unreachable from outside China (filtered connection, verified from CI). No request is attempted."
+      "note": "Aucune page de statut joignable (vérifié le 2026-10-06) : status.zhipuai.cn filtré hors de Chine, status.zhipu.ai au certificat expiré, status.z.ai inexistant, bigmodel.cn sans page de statut. Aucune requête n'est tentée.",
+      "noteEn": "No reachable status page (checked 2026-10-06): status.zhipuai.cn filtered outside China, status.zhipu.ai with an expired certificate, status.z.ai does not exist, bigmodel.cn has no status page. No request is attempted."
     },
     "scope": "GLM / plateforme BigModel",
     "scopeEn": "GLM / BigModel platform"
@@ -226,8 +226,8 @@
     "source": {
       "kind": "unavailable",
       "url": "https://cloud.baidu.com/product-s/qianfan_home",
-      "note": "Aucune page de statut publique trouvée pour Baidu AI Cloud ni Qianfan (recherche du 2026-09-04 : cloud.baidu.com, intl.cloud.baidu.com, sous-domaines status.*). Aucune requête n'est tentée.",
-      "noteEn": "No public status page found for Baidu AI Cloud or Qianfan (searched 2026-09-04: cloud.baidu.com, intl.cloud.baidu.com, status.* subdomains). No request is attempted."
+      "note": "Aucune page de statut publique trouvée pour Baidu AI Cloud ni Qianfan (recherche du 2026-10-06 : cloud.baidu.com, intl.cloud.baidu.com, status.baidu.com, status.cloud.baidu.com, status.bce.baidu.com, status.qianfan.baidu.com). Aucune requête n'est tentée.",
+      "noteEn": "No public status page found for Baidu AI Cloud or Qianfan (searched 2026-10-06: cloud.baidu.com, intl.cloud.baidu.com, status.baidu.com, status.cloud.baidu.com, status.bce.baidu.com, status.qianfan.baidu.com). No request is attempted."
     },
     "scope": "Plateforme Qianfan / modèles ERNIE",
     "scopeEn": "Qianfan platform / ERNIE models"
