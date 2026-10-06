@@ -129,8 +129,8 @@
       "pageId": "6410630422455"
     },
     "modelPattern": "^DeepSeek",
-    "scope": "API DeepSeek par modèle",
-    "scopeEn": "DeepSeek API, per model"
+    "scope": "API DeepSeek par modèle, chat web, envoi de fichiers et recherche",
+    "scopeEn": "DeepSeek API per model, web chat, file upload and search"
   },
   {
     "id": "moonshot",

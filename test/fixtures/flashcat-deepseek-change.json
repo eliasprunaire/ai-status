@@ -1,0 +1,94 @@
+{
+ "change_id": 7058006316287,
+ "page_id": 6410630422455,
+ "type": "incident",
+ "title": "DeepSeek 网页/API 性能下降（DeepSeek Web/API Degraded Performance）",
+ "description": "本次问题已解决，服务已恢复。\n\nThe incident has been resolved and service has been restored.",
+ "status": "resolved",
+ "affected_components": [
+  {
+   "component_id": "01KY4MVS8BM3F9JSYWACGQVG7A",
+   "name": "DeepSeek V4 Pro API服务(API Service)",
+   "description": "DeepSeek V4 Pro API服务可用性(The availability of DeepSeek V4 Pro API service)",
+   "available_since_seconds": 1706745600,
+   "order_id": 1,
+   "status": "operational"
+  },
+  {
+   "component_id": "01KY4ND2PNYT9FY5W4ZH80VGJ4",
+   "section_id": "01KY4ND2MQAQKEAGJKTNGREKBR",
+   "name": "对话服务(Chatservice)",
+   "description": "对话服务可用性(The availability of Chat Service)",
+   "available_since_seconds": 1706745600,
+   "order_id": 1,
+   "status": "operational"
+  },
+  {
+   "component_id": "01KY4MVS8BSBSVW6053QJ37RJE",
+   "name": "DeepSeek V4.1 Flash API服务(API Service)",
+   "description": "DeepSeek V4 Flash API服务可用性(The availability of DeepSeek V41 Flash API service)",
+   "available_since_seconds": 1706745600,
+   "order_id": 2,
+   "status": "operational"
+  }
+ ],
+ "start_at_seconds": 1790883605,
+ "close_at_seconds": 1790890475,
+ "updates": [
+  {
+   "update_id": "01M3WFPBBHKCVJ2YY4DDKGWQ1Q",
+   "at_seconds": 1790883605,
+   "status": "investigating",
+   "description": "正在排查问题，以定位原因。\n\nThe issue is being investigated to identify the cause.",
+   "component_changes": [
+    {
+     "component_id": "01KY4ND2PNYT9FY5W4ZH80VGJ4",
+     "component_name": "对话服务(Chatservice)",
+     "status": "degraded"
+    },
+    {
+     "component_id": "01KY4MVS8BSBSVW6053QJ37RJE",
+     "component_name": "DeepSeek V4.1 Flash API服务(API Service)",
+     "status": "degraded"
+    }
+   ]
+  },
+  {
+   "update_id": "01M3WGR050JPSE9XVYWWFBHYHH",
+   "at_seconds": 1790884708,
+   "status": "investigating",
+   "description": "正在排查问题，以定位原因。\n\nThe issue is being investigated to identify the cause.",
+   "component_changes": [
+    {
+     "component_id": "01KY4MVS8BM3F9JSYWACGQVG7A",
+     "component_name": "DeepSeek V4 Pro API服务(API Service)",
+     "status": "degraded"
+    }
+   ]
+  },
+  {
+   "update_id": "01M3WP803EGFNY504KWRZWFFV4",
+   "at_seconds": 1790890475,
+   "status": "resolved",
+   "description": "本次问题已解决，服务已恢复。\n\nThe incident has been resolved and service has been restored.",
+   "component_changes": [
+    {
+     "component_id": "01KY4ND2PNYT9FY5W4ZH80VGJ4",
+     "component_name": "对话服务(Chatservice)",
+     "status": "operational"
+    },
+    {
+     "component_id": "01KY4MVS8BSBSVW6053QJ37RJE",
+     "component_name": "DeepSeek V4.1 Flash API服务(API Service)",
+     "status": "operational"
+    },
+    {
+     "component_id": "01KY4MVS8BM3F9JSYWACGQVG7A",
+     "component_name": "DeepSeek V4 Pro API服务(API Service)",
+     "status": "operational"
+    }
+   ]
+  }
+ ],
+ "notify_subscribers": true
+}
