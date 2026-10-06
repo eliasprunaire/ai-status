@@ -268,6 +268,11 @@ const a2 = await read(alibaba, provider, okJson({ success: true, code: 200, http
 assert.strictEqual(a2.status, 'degradation');
 assert.strictEqual(a2.incidents[0].status, 'en cours');
 assert.strictEqual(a2.incidents[0].title, 'Bar');
+assert.deepStrictEqual(a1.components.map((c) => c.name), ['Alibaba Cloud (événements globaux)'], 'jamais de vert sans composant');
+const emptyAli = { success: true, code: 200, httpCode: 200, data: [] };
+const a4 = await read(alibaba, provider, byUrl({ listEventInProgressInternational: { ...emptyAli, data: [{ id: 9, title: 'Zone outage', startTime: Date.now() - 60000 }] }, listHistoryEvent: emptyAli }));
+assert.strictEqual(a4.status, 'degradation', 'événement présent seulement dans l’en-cours : visible');
+assert.strictEqual(a4.incidents.length, 1);
 const a3 = await read(alibaba, provider, okJson({ success: true, code: 200, httpCode: 200, data: 'oops' }));
 assert.strictEqual(a3.status, 'inconnu');
 assert.strictEqual((await read(alibaba, provider, okJson({ success: false, code: 200, httpCode: 200, data: [] }))).status, 'inconnu', 'une enveloppe d’échec ne prouve pas un état sain');
