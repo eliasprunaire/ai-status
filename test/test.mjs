@@ -72,7 +72,7 @@ assert.strictEqual(normalizeComponentStatus('under_maintenance'), 'maintenance')
 assert.strictEqual(normalizeComponentStatus('autre'), 'inconnu');
 assert.strictEqual(normalizeGoogleImpact('SERVICE_OUTAGE'), 'incident_majeur');
 assert.strictEqual(normalizeGoogleImpact('SERVICE_DISRUPTION'), 'degradation');
-assert.strictEqual(normalizeGoogleImpact('SERVICE_INFORMATION'), null);
+assert.strictEqual(normalizeGoogleImpact('SERVICE_INFORMATION'), 'degradation');
 assert.strictEqual(normalizeGoogleImpact('NOUVEL_IMPACT'), 'inconnu');
 
 // 2. worstOf : le pire l'emporte ; un inconnu interdit le vert mais n'écrase pas un état réel.
@@ -221,7 +221,8 @@ const productsWithSql = { products: [...products.products, { id: 'cloud-sql', ti
 const g4 = await read(google, gProvider, byUrl({ 'products.json': productsWithSql, 'incidents.json': openOn('Cloud SQL', 'SERVICE_OUTAGE', 'Cloud SQL', productsWithSql) }));
 assert.strictEqual(g4.status, 'operationnel', 'hors périmètre : ignoré');
 const g5 = await read(google, gProvider, byUrl({ 'products.json': products, 'incidents.json': openOn('Vertex Gemini API', 'SERVICE_INFORMATION') }));
-assert.strictEqual(g5.status, 'operationnel', 'informatif : ignoré');
+assert.strictEqual(g5.status, 'degradation', 'SERVICE_INFORMATION ouvert : visible (vraies hausses d’erreurs ainsi classées)');
+assert.strictEqual(g5.incidents.length, 1);
 const g6 = await read(google, gProvider, byUrl({ 'products.json': products, 'incidents.json': openOn('Vertex Gemini API', 'NOUVEL_IMPACT') }));
 assert.strictEqual(g6.status, 'inconnu', 'impact actif inconnu : jamais vert');
 const g7 = await read(google, gProvider, byUrl({ 'products.json': products }));
@@ -239,6 +240,7 @@ for (const badIncident of [
 ]) {
   assert.strictEqual((await read(google, gProvider, byUrl({ 'products.json': products, 'incidents.json': [badIncident] }))).status, 'inconnu');
 }
+assert.strictEqual((await read(google, gProvider, byUrl({ 'products.json': products, 'incidents.json': [{ ...openOn('Vertex Gemini API', 'SERVICE_DISRUPTION')[0], affected_products: [{ id: 'nouveau-produit-gcp', title: 'Cloud Nouveau' }] }] }))).status, 'operationnel', 'produit inconnu hors périmètre : ignoré, la lecture tient');
 assert.strictEqual((await read(google, gProvider, byUrl({ 'products.json': products, 'incidents.json': Array(STATUS_LIMITS.events + 1).fill(openOn('Vertex Gemini API', 'SERVICE_DISRUPTION')[0]) }))).status, 'inconnu', 'les incidents sont bornés avant toute jointure');
 
 // 5. Flashcat (DeepSeek) : fixture réelle, aucun changement actif → operationnel.
