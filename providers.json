@@ -84,16 +84,13 @@
     "statusUrl": "https://status.perplexity.com",
     "source": {
       "kind": "incidentio",
+      "format": "proxy",
       "url": "https://status.perplexity.com",
       "pageName": "Perplexity",
-      "requiredComponents": [
-        "Website",
-        "App",
-        "Computer"
-      ]
+      "requiredComponents": ["Website", "App", "Computer", "API"]
     },
-    "scope": "Website, App et Computer publiés par la page officielle Perplexity ; API non couverte",
-    "scopeEn": "Website, App and Computer published on the official Perplexity status page; API not covered"
+    "scope": "Website, App, Computer et API publiés par la page officielle Perplexity",
+    "scopeEn": "Website, App, Computer and API published on the official Perplexity status page"
   },
   {
     "id": "mistral",

@@ -41,7 +41,7 @@ Les 24 fournisseurs référencés, avec leur périmètre et leur méthode de col
 | [xAI](https://status.x.ai) | API, Grok et applications | Flux RSS officiel |
 | [Google Cloud (Vertex AI / Gemini)](https://status.cloud.google.com) | Produits Vertex AI et Gemini, toutes régions | Flux JSON officiels |
 | [Cursor](https://status.cursor.com) | Client Cursor, agents et CLI ; aucun état par modèle | Statuspage |
-| [Perplexity](https://status.perplexity.com) | Website, App et Computer ; API non couverte | incident.io |
+| [Perplexity](https://status.perplexity.com) | Website, App, Computer et API | incident.io |
 | [Mistral AI](https://status.mistral.ai) | Génération sur **Ministral 3 3B** uniquement | Sonde API authentifiée |
 | [Alibaba Cloud](https://status.alibabacloud.com) | Cloud global ; pas Qwen ou Model Studio en particulier | API publique |
 | [DeepSeek](https://status.deepseek.com) | API par modèle | Flashcat |
