@@ -3,23 +3,25 @@ import { attribute, elements, elementText, wholeElement } from '../lib/markup.mj
 
 const schema = (detail) => { throw fail('schema', `flux RSS xAI (${detail})`, `xAI RSS feed (${detail})`); };
 
-export function parseXaiRss(xml, expectedComponents) {
+// Le flux est un historique d'incidents : un item « resolved » est passé, tout autre état est
+// un incident en cours. La page HTML de status.x.ai est derrière un challenge Cloudflare, le
+// RSS est la seule source lisible. Sévérité xAI → état du contrat ; inconnue → dégradation
+const SEVERITY = { outage: 'incident_majeur', disruption: 'degradation', degraded: 'degradation', maintenance: 'maintenance' };
+const STATE = { investigating: 'investigating', identified: 'identified', monitoring: 'monitoring' };
+
+export function parseXaiRss(xml) {
   if (typeof xml !== 'string' || /<!DOCTYPE|<!ENTITY/i.test(xml)) schema('XML refusé');
   const root = wholeElement(xml, 'rss', { declaration: true });
-  if (!root || attribute(root.attributes, 'version') !== '2.0' || attribute(root.attributes, 'xmlns:atom') !== 'http://www.w3.org/2005/Atom') schema('rss 2.0');
+  if (!root || attribute(root.attributes, 'version') !== '2.0') schema('rss 2.0');
   const channel = wholeElement(root.body, 'channel');
   if (!channel) schema('channel');
 
   const items = elements(channel.body, 'item');
-  if (!items || items.length === 0) schema('aucun item');
-  const header = channel.body.slice(0, items[0].start);
-  if (elementText(header, 'title') !== 'SpaceXAI System Status' || elementText(header, 'link') !== 'https://status.x.ai') schema('identité du canal');
-  const builtAt = elementText(header, 'lastBuildDate');
-  if (!builtAt || !Number.isFinite(Date.parse(builtAt))) schema('lastBuildDate');
-  const atomLinks = elements(header, 'atom:link');
-  if (!atomLinks || atomLinks.length !== 1 || attribute(atomLinks[0].attributes, 'href') !== 'https://status.x.ai/feed.xml' || attribute(atomLinks[0].attributes, 'rel') !== 'self' || attribute(atomLinks[0].attributes, 'type') !== 'application/rss+xml') schema('lien autonome');
+  if (!items) schema('item');
+  const header = items.length ? channel.body.slice(0, items[0].start) : channel.body;
+  if (elementText(header, 'link') !== 'https://status.x.ai') schema('identité du canal');
 
-  const components = new Set(expectedComponents);
+  // Un même incident est publié une fois par composant touché : l'unicité porte sur le couple
   const seen = new Set();
   return items.map(({ body }) => {
     const title = elementText(body, 'title');
@@ -28,9 +30,10 @@ export function parseXaiRss(xml, expectedComponents) {
     const description = elementText(body, 'description');
     const pubDate = elementText(body, 'pubDate');
     const titleParts = title?.match(/^\[([^\]]+)]\s+(.+)$/);
-    if (!titleParts || !components.has(titleParts[1])) schema('composant inconnu');
-    if (!guid || !/^INC[0-9a-z]+$/i.test(guid) || seen.has(guid)) schema('guid');
-    seen.add(guid);
+    if (!titleParts) schema('titre');
+    const component = titleParts[1].trim();
+    if (!guid || !/^INC[0-9a-z]+$/i.test(guid) || seen.has(`${component}\n${guid}`)) schema('guid');
+    seen.add(`${component}\n${guid}`);
     if (!pubDate || !Number.isFinite(Date.parse(pubDate))) schema('pubDate');
 
     let url;
@@ -43,26 +46,54 @@ export function parseXaiRss(xml, expectedComponents) {
 
     const statuses = [...(description ?? '').matchAll(/<h3>Status:\s*([^<]+)<\/h3>/gi)];
     const severities = [...(description ?? '').matchAll(/<p>Severity:\s*([^<]+)<\/p>/gi)];
-    const status = statuses.length === 1 ? statuses[0][1].trim().toLowerCase() : null;
-    const severity = severities.length === 1 ? severities[0][1].trim().toLowerCase() : null;
-    const categoryElements = elements(body, 'category');
-    if (!categoryElements) schema('category');
-    const categories = categoryElements.map((category) => category.body.trim().toLowerCase());
-    if (status !== 'resolved' || severity !== 'available' || categories.length !== 2 || categories[0] !== 'available' || categories[1] !== 'resolved') schema('état non reconnu');
-    return { component: titleParts[1], title: titleParts[2], guid, pubDate: new Date(pubDate).toISOString(), url: url.href };
+    if (statuses.length !== 1 || severities.length > 1) schema('état');
+    const status = statuses[0][1].trim().toLowerCase();
+    const severity = severities.length ? severities[0][1].trim().toLowerCase() : null;
+    return {
+      component,
+      title: titleParts[2],
+      guid,
+      active: status !== 'resolved',
+      state: STATE[status] ?? 'en cours',
+      impact: SEVERITY[severity] ?? 'degradation',
+      pubDate: new Date(pubDate).toISOString(),
+      url: url.href,
+    };
   });
 }
 
 export const METHOD = { fr: 'flux RSS officiel xAI', en: 'official xAI RSS feed' };
 
 export async function collect(provider, get) {
-  const components = provider.source.components;
-  if (!Array.isArray(components) || components.length === 0 || components.some((name) => typeof name !== 'string' || !name) || new Set(components).size !== components.length) schema('liste des composants');
-  parseXaiRss(await get(provider.source.url, { as: 'text', accept: 'application/rss+xml,application/xml,text/xml' }), components);
+  const declared = provider.source.components;
+  if (!Array.isArray(declared) || declared.length === 0 || declared.some((name) => typeof name !== 'string' || !name) || new Set(declared).size !== declared.length) schema('liste des composants');
+  const items = parseXaiRss(await get(provider.source.url, { as: 'text', accept: 'application/rss+xml,application/xml,text/xml' }));
+  const active = items.filter((item) => item.active);
+
+  // Composants déclarés, plus tout composant touché par un incident en cours : un service
+  // renommé ou ajouté par xAI reste visible au lieu de casser la lecture
+  const names = [...declared, ...active.map((item) => item.component).filter((name) => !declared.includes(name))];
+  const rank = ['operationnel', 'maintenance', 'degradation', 'incident_majeur'];
+  const statusOf = (name) => active
+    .filter((item) => item.component === name)
+    .reduce((worst, item) => (rank.indexOf(item.impact) > rank.indexOf(worst) ? item.impact : worst), 'operationnel');
+
+  // Un incident par guid, avec tous ses composants
+  const incidents = [];
+  for (const item of active) {
+    const existing = incidents.find((incident) => incident.guid === item.guid);
+    if (existing) {
+      if (!existing.components.includes(item.component)) existing.components.push(item.component);
+      if (rank.indexOf(item.impact) > rank.indexOf(existing.impact)) existing.impact = item.impact;
+      continue;
+    }
+    incidents.push({ guid: item.guid, title: item.title, state: item.state, impact: item.impact, createdAt: item.pubDate, url: item.url, components: [item.component] });
+  }
+
   return {
     indicator: null,
-    rawStatus: `${components.length} services : ${components.length} available`,
-    components: components.map((name) => ({ name, status: 'operationnel' })),
-    incidents: [],
+    rawStatus: `${items.length} incidents publiés, ${incidents.length} en cours`,
+    components: names.map((name) => ({ name, status: statusOf(name) })),
+    incidents: incidents.map(({ guid, ...incident }) => incident),
   };
 }

@@ -270,13 +270,11 @@ assert.strictEqual(a3.status, 'inconnu');
 assert.strictEqual((await read(alibaba, provider, okJson({ success: false, code: 200, httpCode: 200, data: [] }))).status, 'inconnu', 'une enveloppe d’échec ne prouve pas un état sain');
 assert.strictEqual((await read(alibaba, provider, okJson({ success: true, code: 200, httpCode: 200, data: [{ title: 'X', startTime: Date.now(), endTime: 'jamais' }] }))).status, 'inconnu', 'une fin invalide ne masque pas un événement');
 
-// 7. xAI : le RSS officiel confirme l'absence d'incident actif ; les 13 services
-// restent déclarés localement car Docs et xAI Website n'ont aucun incident historique
+// 7. xAI : le RSS officiel est un historique d'incidents (fixture réelle du 2026-10-06 :
+// 17 items, tous résolus, sévérités outage et disruption, un même guid par composant touché)
 const xaiComponents = [
-  'Grok (iOS)', 'Grok (Android)', 'Grok (Web)', 'Grok Build',
-  'Grok (Office/Workspace Plugins)', 'Single Sign-On',
-  'API (us-east-1.api.x.ai)', 'API (us-west-2.api.x.ai)', 'API (eu-west-1.api.x.ai)',
-  'API Console', 'Docs', 'xAI Website', 'Grok in X',
+  'Global (api.x.ai)', 'US (us.api.x.ai)', 'grok.com', 'Grok (iOS)', 'Grok (Android)',
+  'Grok in X', 'Grok (Build)', 'Grok (Office/Workspace Plugins)', 'Voice',
 ];
 const xaiProvider = {
   ...provider,
@@ -285,44 +283,50 @@ const xaiProvider = {
   source: { kind: 'xai', url: 'https://status.x.ai/feed.xml', components: xaiComponents },
 };
 const xaiFeed = fixtureText('xai-feed.xml');
-assert.strictEqual(xai.parseXaiRss(xaiFeed, xaiComponents).length, 1, 'fixture réelle réduite : incident résolu sans champ Resolved');
-assert.strictEqual(xai.parseXaiRss(xaiFeed.replace('<item>', '<item >').replace('</item>', '</item >'), xaiComponents).length, 1, 'espaces XML valides autour de item');
-const activeSpacedItem = xaiFeed.match(/<item>[\s\S]*<\/item>/)[0]
-  .replace('<item>', '<item >')
-  .replace('</item>', '</item >')
-  .replaceAll('INC702624e4', 'INC702624e5')
-  .replace('<h3>Status: RESOLVED</h3>', '<h3>Status: INVESTIGATING</h3>');
-assert.throws(
-  () => xai.parseXaiRss(xaiFeed.replace('</channel>', `${activeSpacedItem}</channel>`), xaiComponents),
-  (error) => error.code === 'schema' && /état non reconnu/.test(error.detail),
-  'un item actif avec espaces est analysé puis refusé',
-);
+const xaiItems = xai.parseXaiRss(xaiFeed);
+assert.strictEqual(xaiItems.length, 17, 'tous les items sont lus, sans lastBuildDate ni sévérité « available »');
+assert.ok(xaiItems.every((item) => !item.active), 'historique entièrement résolu');
 const x1 = await read(xai, xaiProvider, okText(xaiFeed));
-assert.strictEqual(x1.status, 'operationnel');
+assert.strictEqual(x1.status, 'operationnel', 'des incidents résolus ne rendent jamais la source illisible');
 assert.deepStrictEqual(names(x1.components), xaiComponents);
-assert.deepStrictEqual(impacted(x1.components), []);
 assert.deepStrictEqual(x1.incidents, []);
 assert.strictEqual(x1.collect.methodLabel, 'flux RSS officiel xAI');
+
+// Incident en cours sur deux composants (même guid), dont un composant non déclaré
+const firstItem = xaiFeed.match(/<item>[\s\S]*?<\/item>/)[0];
+const activeItem = (component, guid, status, severity) => firstItem
+  .replace(/\[[^\]]+\]/, `[${component}]`)
+  .replaceAll('INC578e0bc8', guid)
+  .replace('<h3>Status: RESOLVED</h3>', `<h3>Status: ${status}</h3>`)
+  .replace('<p>Severity: outage</p>', `<p>Severity: ${severity}</p>`);
+const liveFeed = xaiFeed.replace('<item>', `${activeItem('Global (api.x.ai)', 'INCabc1', 'INVESTIGATING', 'outage')}${activeItem('Nouveau service', 'INCabc1', 'INVESTIGATING', 'outage')}${activeItem('grok.com', 'INCdef2', 'MONITORING', 'disruption')}<item>`);
+const x2 = await read(xai, xaiProvider, okText(liveFeed));
+assert.strictEqual(x2.status, 'incident_majeur', 'une panne en cours est remontée, plus jamais masquée en « non vérifié »');
+assert.strictEqual(x2.collect.state, 'ok');
+assert.deepStrictEqual(impacted(x2.components), ['Global (api.x.ai)', 'grok.com', 'Nouveau service']);
+assert.strictEqual(x2.components.find((c) => c.name === 'grok.com').status, 'degradation');
+assert.strictEqual(x2.incidents.length, 2, 'un incident par guid');
+assert.deepStrictEqual(x2.incidents[0].components, ['Global (api.x.ai)', 'Nouveau service']);
+assert.strictEqual(x2.incidents[0].status, 'investigating');
+assert.strictEqual(x2.incidents[1].status, 'monitoring');
+const x3 = await read(xai, xaiProvider, okText(xaiFeed.replace('<item>', `${activeItem('Voice', 'INCghi3', 'SOMETHING NEW', 'unknown-level')}<item>`)));
+assert.strictEqual(x3.status, 'degradation', 'état ou sévérité inconnus d’un incident non résolu : dégradation, jamais vert');
+assert.strictEqual(x3.incidents[0].status, 'en cours');
+
 for (const invalidFeed of [
-  xaiFeed.replace('<h3>Status: RESOLVED</h3>', '<h3>Status: INVESTIGATING</h3>'),
-  xaiFeed.replace('[API Console]', '[Service inconnu]'),
-  xaiFeed.replace('https://status.x.ai/api-console/INC702624e4', 'https://evil.test/INC702624e4'),
-  xaiFeed.replace(' xmlns:atom="http://www.w3.org/2005/Atom"', ''),
-  xaiFeed.replace(' version="2.0"', ' data-version="2.0"'),
-  xaiFeed.replace(' version="2.0"', ' version="2.0" version="1.0"'),
-  xaiFeed.replace(' version="2.0"', ' version="junk version="2.0" "'),
-  xaiFeed.replace(' href="https://status.x.ai/feed.xml"', ' data-href="https://status.x.ai/feed.xml"'),
+  xaiFeed.replace('https://status.x.ai/api-global/INC578e0bc8', 'https://evil.test/INC578e0bc8'),
+  xaiFeed.replace('<link>https://status.x.ai</link>', '<link>https://evil.test</link>'),
+  xaiFeed.replace(' version="2.0"', ' version="1.0"'),
   xaiFeed.replace('<h3>Status: RESOLVED</h3>', '<h3>Status: RESOLVED</h3><h3>Status: RESOLVED</h3>'),
-  xaiFeed.replace('<p>Severity: available</p>', '<p>Severity: available</p><p>Severity: available</p>'),
-  `<racine-en-trop />${xaiFeed}`,
+  xaiFeed.replace('<item>', `${firstItem}<item>`),
+  xaiFeed.replace('[Global (api.x.ai)] ', ''),
+  `<!DOCTYPE x>${xaiFeed}`,
   xaiFeed.replace('</rss>', ''),
-  xaiFeed.replace('<rss ', '<RSS ').replace('</rss>', '</RSS>'),
   xaiFeed.replace('<item>', '</item><item>'),
-  xaiFeed.replace('</item>', '<foreign></item>'),
   xaiFeed.replace('</channel>', `${'<item>'.repeat(2_000)}</channel>`),
 ]) {
   const failed = await read(xai, xaiProvider, okText(invalidFeed));
-  assert.strictEqual(failed.status, 'inconnu', 'structure ou sémantique RSS inconnue → jamais vert');
+  assert.strictEqual(failed.status, 'inconnu', 'structure RSS inconnue ou lien étranger → jamais vert');
   assert.strictEqual(failed.collect.state, 'error');
 }
 

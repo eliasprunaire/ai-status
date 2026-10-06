@@ -32,19 +32,15 @@
       "kind": "xai",
       "url": "https://status.x.ai/feed.xml",
       "components": [
+        "Global (api.x.ai)",
+        "US (us.api.x.ai)",
+        "grok.com",
         "Grok (iOS)",
         "Grok (Android)",
-        "Grok (Web)",
-        "Grok Build",
+        "Grok in X",
+        "Grok (Build)",
         "Grok (Office/Workspace Plugins)",
-        "Single Sign-On",
-        "API (us-east-1.api.x.ai)",
-        "API (us-west-2.api.x.ai)",
-        "API (eu-west-1.api.x.ai)",
-        "API Console",
-        "Docs",
-        "xAI Website",
-        "Grok in X"
+        "Voice"
       ]
     },
     "scope": "Services xAI listés sur status.x.ai (API, Grok, apps)",
