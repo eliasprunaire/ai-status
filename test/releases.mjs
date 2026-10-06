@@ -112,6 +112,9 @@ const collectWorkflow = readFileSync(new URL('../.github/workflows/collect.yml',
 assert.match(collectWorkflow, /  test:\n    uses: \.\/\.github\/workflows\/tests\.yml\n(?:    #[^\n]*\n)*    with:\n      expected_sha: \$\{\{ github\.sha \}\}\n/, 'la collecte passe son SHA au garde de tests.yml : un workflow_dispatch de collect.yml ne doit pas être refusé');
 assert.match(collectWorkflow, /\nconcurrency:\n  group: collect-\$\{\{ github\.ref \}\}-\$\{\{ github\.event_name == 'push' && github\.sha \|\| 'periodic' \}\}\n  cancel-in-progress: \$\{\{ github\.event_name != 'push' \}\}\n/, 'un push a son groupe de concurrence par commit et n’est jamais annulé ; une collecte périodique bloquée est annulée par la suivante : run de publication des releases protégé');
 assert.match(collectWorkflow, /  deploy:[\s\S]*?    concurrency:\n      group: pages\n      cancel-in-progress: false\n/, 'les déploiements Pages sont sérialisés sans interrompre celui en cours');
+const jobBlock = (name) => collectWorkflow.split(`\n  ${name}:\n`)[1].split(/\n  [a-z-]+:\n/)[0];
+assert.match(jobBlock('alert'), /issues: write/, 'le job alert gère les issues de surveillance');
+assert.doesNotMatch(jobBlock('collect'), /issues: write/, 'la collecte, qui lit des pages tierces, n’écrit jamais d’issue');
 const guard = workflow.match(/        run: \|\n([\s\S]*?)\n      - uses:/)[1].replace(/^          /gm, '');
 for (const [event, expected, actual, status] of [
   ['workflow_dispatch', sha, sha, 0],

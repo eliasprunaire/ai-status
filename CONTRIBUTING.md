@@ -52,6 +52,15 @@ Le cron de `collect.yml` (`7,37 * * * *`) ne tient pas sa cadence : GitHub l’e
 
 Le script sort en erreur si GitHub ne répond pas `204`. Les collectes périodiques partagent un groupe de concurrence : la plus récente annule celle en cours. Un run dure environ une minute, donc seul un run bloqué (par exemple un déploiement resté en attente côté GitHub) est annulé, au lieu de geler toutes les collectes suivantes. Un push sur `main` a son propre groupe, par commit : le cron ne l’annule jamais, et la publication des releases n’est pas perdue. Les déploiements Pages, eux, passent un par un. Chaque exécution rejoue les tests, puis collecte, puis déploie. La sonde Mistral, facturable, ne s’exécute qu’une fois par fenêtre de 30 minutes : les autres collectes reprennent l’observation publiée tant qu’elle est saine. Renouveler le jeton avant son expiration : sans lui, la page retombe sur le cron de secours et l’alerte « données obsolètes » s’affiche après 20 minutes.
 
+## Surveillance des sources
+
+Chaque collecte publie `data/health.json` avec la page et relit celui de la collecte précédente (`lib/health.mjs`). Le job `alert` de `collect.yml`, seul autorisé à écrire des issues, ouvre une issue `[surveillance]` quand :
+
+- un fournisseur n’est plus lu depuis plus d’une heure (fermée automatiquement quand la lecture reprend) ;
+- la liste des composants publiés par une page change (ajout, retrait, renommage) : souvent un modèle ajouté ou retiré, parfois une réorganisation qui demande d’ajuster `providers.json`.
+
+Les sources déclarées `unavailable` ne déclenchent jamais d’alerte. Chaque run liste aussi les fournisseurs non lus en avertissement, avec un tableau dans son résumé.
+
 ## Versions
 
 Utiliser des messages de commit [Conventional Commits](https://www.conventionalcommits.org/fr/v1.0.0/) : `fix:` et `perf:` déclenchent un correctif, `feat:` une version mineure. Avant `1.0.0`, une rupture signalée par `!` ou `BREAKING CHANGE:` déclenche une version mineure et figure dans les notes. Sans rupture, `docs:`, `test:`, `ci:` et `chore:` ne déclenchent pas seuls de release. Le passage à `1.0.0` demande une décision explicite ; le contrat JSON v2 garde sa numérotation indépendante.

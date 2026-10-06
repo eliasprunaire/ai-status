@@ -38,6 +38,8 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    outputs:
+      alerts: ${{ steps.collect.outputs.alerts }}
     steps:
       # persist-credentials: false : pas de jeton dans .git/config pendant la collecte
       # de sources tierces
@@ -48,6 +50,7 @@ jobs:
         with:
           node-version: 24
       - name: Collecter les statuts
+        id: collect
         env:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
         run: node collect.mjs
@@ -86,6 +89,30 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
+
+  # Issues de surveillance : seul job autorisé à écrire des issues, séparé de la collecte
+  # qui lit des pages tierces. Fournisseur non lu depuis plus d'une heure, ou structure de
+  # page modifiée (lib/health.mjs) ; fermeture automatique quand la lecture reprend
+  alert:
+    if: github.ref == 'refs/heads/main' && needs.collect.outputs.alerts != '' && needs.collect.outputs.alerts != '[]'
+    needs: collect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          ALERTS: ${{ needs.collect.outputs.alerts }}
+        with:
+          script: |
+            const { applyAlerts } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/alerts.mjs`);
+            const done = await applyAlerts({ github, context, alerts: JSON.parse(process.env.ALERTS) });
+            core.info(JSON.stringify(done));
 
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
