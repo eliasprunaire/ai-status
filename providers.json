@@ -304,8 +304,8 @@
       "url": "https://status.together.ai"
     },
     "modelPattern": "^(?!(Website|Playground)$)",
-    "scope": "Site, Playground et modèles servis par Together AI",
-    "scopeEn": "Website, Playground and models served by Together AI"
+    "scope": "Site, Playground et modèles listés sur la page officielle (pas tout le catalogue Together)",
+    "scopeEn": "Website, Playground and models listed on the official page (not the whole Together catalogue)"
   },
   {
     "id": "openrouter",

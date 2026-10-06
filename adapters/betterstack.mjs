@@ -15,6 +15,10 @@ export function betterstackStatus(state) {
 export const METHOD = { fr: 'API Better Stack', en: 'Better Stack API' };
 
 const validDate = (value) => typeof value === 'string' && Number.isFinite(Date.parse(value));
+// Un incident est ouvert tant que ends_at est null. Une maintenance a une fin planifiée :
+// elle reste à afficher tant que cette fin n'est pas passée (à venir ou en cours)
+const pending = (attributes) => attributes.ends_at === null
+  || (attributes.report_type === 'maintenance' && Date.parse(attributes.ends_at) > Date.now());
 
 export async function collect(provider, get) {
   const doc = await get(provider.source.url.replace(/\/+$/, '') + '/index.json');
@@ -52,14 +56,14 @@ export async function collect(provider, get) {
     if (!attributes || typeof attributes.title !== 'string' || !attributes.title || typeof attributes.report_type !== 'string' || !Object.hasOwn(attributes, 'ends_at') || !(attributes.ends_at === null || validDate(attributes.ends_at)) || !Array.isArray(attributes.affected_resources) || attributes.affected_resources.length > STATUS_LIMITS.eventComponents) throw fail('schema', 'index.json (status_report attributes)');
     if (attributes.ends_at === null && !validDate(attributes.starts_at)) throw fail('schema', 'index.json (status_report starts_at)');
     const affectedIds = attributes.affected_resources.map((affected) => String(affected?.status_page_resource_id ?? ''));
-    if (new Set(affectedIds).size !== affectedIds.length || affectedIds.some((id) => !id || (attributes.ends_at === null && !nameOf.has(id)))) throw fail('schema', 'index.json (affected_resources)');
+    if (new Set(affectedIds).size !== affectedIds.length || affectedIds.some((id) => !id || (pending(attributes) && !nameOf.has(id)))) throw fail('schema', 'index.json (affected_resources)');
     return report;
-  }).filter((report) => report.attributes.ends_at === null);
+  }).filter((report) => pending(report.attributes));
   const affected = (r) => r.attributes.affected_resources.map((a) => nameOf.get(String(a.status_page_resource_id)));
   const incidents = reports.filter((r) => r.attributes.report_type !== 'maintenance').map((r) => ({
     title: r.attributes.title,
     state: 'en cours',
-    impact: r.attributes.aggregate_state ?? null,
+    impact: r.attributes.aggregate_state == null ? null : betterstackStatus(r.attributes.aggregate_state),
     createdAt: r.attributes.starts_at ?? null,
     updatedAt: null,
     url: null,
@@ -69,7 +73,7 @@ export async function collect(provider, get) {
     title: r.attributes.title,
     state: r.attributes.starts_at && Date.parse(r.attributes.starts_at) > Date.now() ? 'scheduled' : 'in_progress',
     scheduledFor: r.attributes.starts_at ?? null,
-    scheduledUntil: null,
+    scheduledUntil: r.attributes.ends_at ?? null,
     url: null,
   }));
   return {
