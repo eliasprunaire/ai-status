@@ -10,6 +10,7 @@ import { attribute, elements, elementText, wholeElement } from '../lib/markup.mj
 // une région inconnue renvoie des parenthèses vides et est traitée comme illisible
 const REGION = {
   'cn-beijing': '华北2（北京）',
+  'cn-beijing2': '华北3（北京）',
   'cn-shanghai': '华东2（上海）',
   'cn-guangzhou': '华南1（广州）',
   'ap-southeast-1': '亚太东南（柔佛）',
@@ -63,7 +64,8 @@ export async function collect(provider, get) {
   }
   const components = results.map((r) => {
     if (r.why) return { name: `${productLabel} (${r.id})`, status: 'inconnu' };
-    const ongoing = r.parsed.items.filter((i) => !i.title.trimEnd().endsWith('(已恢复)'));
+    // Suffixe en parenthèses ASCII ou pleine chasse : « (已恢复) » ou « （已恢复） »
+    const ongoing = r.parsed.items.filter((i) => !/[（(]已恢复[)）]$/.test(i.title.trimEnd()));
     return { name: `${productLabel} (${r.parsed.region})`, status: ongoing.length ? 'degradation' : 'operationnel', ongoing };
   });
   const incidents = components.flatMap((c) => (c.ongoing ?? []).map((i) => ({

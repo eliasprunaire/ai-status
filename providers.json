@@ -216,12 +216,7 @@
       "url": "https://status.volcengine.com",
       "product": "ModelArk",
       "productLabel": "火山方舟",
-      "regions": [
-        "cn-beijing",
-        "cn-shanghai",
-        "cn-guangzhou",
-        "ap-southeast-1"
-      ]
+      "regions": ["cn-beijing", "cn-beijing2", "ap-southeast-1"]
     },
     "scope": "Plateforme Volcengine Ark (火山方舟) qui sert les modèles Doubao, par région",
     "scopeEn": "Volcengine Ark (火山方舟) platform serving Doubao models, per region"
