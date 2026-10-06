@@ -1,6 +1,6 @@
 // Collecteur : parcourt providers.json, lance l'adaptateur adéquat par fournisseur,
 // et écrit public/data/status.json (contrat v2). Un échec ne bloque jamais les autres.
-import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, renameSync, appendFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -42,10 +42,27 @@ mkdirSync(path.dirname(outPath), { recursive: true });
 const serialized = JSON.stringify(out) + '\n';
 if (Buffer.byteLength(serialized) > MAX_STATUS_BYTES) throw new Error('status.json dépasse la borne de publication');
 assertStatusDocument(JSON.parse(serialized), providers);
+// build-info dépend de git : écrit avant le fichier temporaire pour ne jamais en laisser d'orphelin
+writeBuildInfo();
 const tempPath = `${outPath}.tmp-${process.pid}`;
 writeFileSync(tempPath, serialized);
-writeBuildInfo();
 renameSync(tempPath, outPath);
 console.log(`écrit ${outPath} (${out.providers.length} fournisseurs)`);
 const ok = out.providers.filter((p) => p.collect.state === 'ok').length;
 console.log(`collecte ok : ${ok}/${out.providers.length} ; pire état : ${out.summary.worst}`);
+
+// Observabilité : chaque fournisseur non lu devient un avertissement visible dans le run
+// GitHub Actions, avec un tableau récapitulatif. Les sources déclarées « unavailable »
+// (aucune requête tentée) restent en simple ligne de journal
+const unread = out.providers.filter((p) => p.collect.state === 'error');
+const intended = (p) => providers.find((d) => d.id === p.id)?.source.kind === 'unavailable';
+const oneLine = (value) => String(value ?? '').replace(/[\r\n%]/g, ' ');
+for (const p of unread) {
+  if (process.env.GITHUB_ACTIONS === 'true' && !intended(p)) console.log(`::warning title=${oneLine(p.id)} non lu::${oneLine(p.collect.error)}`);
+  else console.log(`non lu : ${p.id} : ${p.collect.error}`);
+}
+if (process.env.GITHUB_STEP_SUMMARY) {
+  const cell = (value) => oneLine(value).replace(/\|/g, '\\|');
+  const rows = out.providers.map((p) => `| ${cell(p.name)} | ${cell(p.status)} | ${p.collect.state === 'ok' ? 'lu' : intended(p) ? 'non lu (prévu)' : '**non lu**'} | ${cell(p.collect.state === 'error' ? p.collect.error : '')} |`);
+  appendFileSync(process.env.GITHUB_STEP_SUMMARY, [`### Collecte : ${ok}/${out.providers.length} lus`, '', '| Fournisseur | État | Lecture | Erreur |', '|---|---|---|---|', ...rows, ''].join('\n'));
+}
