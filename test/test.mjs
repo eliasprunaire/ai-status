@@ -256,11 +256,30 @@ for (const body of [{}, { data: {} }, { data: { page: { components: [] }, active
 }
 const f2 = await read(flashcat, fProvider, httpFail(404));
 assert.strictEqual(f2.status, 'inconnu');
-// 5c. Un changement actif → degradation avec son titre, services à l'état illisible.
-const f3 = await read(flashcat, fProvider, okJson({ data: { page: { components: [{ name: 'API' }] }, active_changes: [{ title: 'API errors' }] } }));
-assert.strictEqual(f3.status, 'degradation');
-assert.strictEqual(f3.incidents[0].title, 'API errors');
-assert.strictEqual(f3.components[0].status, 'inconnu');
+// 5c. Changement actif à la forme réelle (/change/list, 2026-10) : l'état de chaque
+// composant touché est remonté, plus aplati en « illisible »
+const activeDoc = fixture('flashcat-deepseek-active.json');
+const realChange = fixture('flashcat-deepseek-change.json');
+const flashChatId = realChange.updates[0].component_changes[0].component_id;
+const liveChange = {
+  ...realChange,
+  status: 'investigating',
+  close_at_seconds: 0,
+  affected_components: realChange.affected_components.map((c) => ({ ...c, status: c.component_id === flashChatId ? 'full_outage' : 'degraded' })),
+};
+const withChange = (change) => ({ ...activeDoc, data: { ...activeDoc.data, active_changes: [change] } });
+const f3 = await read(flashcat, fProvider, okJson(withChange(liveChange)));
+assert.strictEqual(f3.status, 'indisponible', 'full_outage n’est plus aplati en dégradation');
+assert.strictEqual(f3.incidents[0].title, realChange.title);
+assert.strictEqual(f3.incidents[0].status, 'investigating');
+assert.ok(f3.incidents[0].startedAt, 'date de début lue');
+assert.strictEqual(impacted(f3.components).length, realChange.affected_components.length);
+// « operational » sur un changement encore actif : la dernière mise à jour fait foi
+const f4 = await read(flashcat, fProvider, okJson(withChange({ ...realChange, status: 'investigating', affected_components: realChange.affected_components.map((c) => ({ ...c, status: 'operational' })) })));
+assert.notStrictEqual(f4.status, 'operationnel', 'un incident actif ne laisse jamais le fournisseur vert');
+const f5 = await read(flashcat, fProvider, okJson(withChange({ ...liveChange, type: 'maintenance' })));
+assert.strictEqual(f5.maintenances.length, 1, 'maintenance rangée en maintenance');
+assert.strictEqual(f5.incidents.length, 0);
 
 // 6. Alibaba : fixture réelle (tout récupéré) → operationnel, incidents vides ; un en cours → degradation.
 const a1 = await read(alibaba, provider, okJson(fixture('alibaba-events.json')));

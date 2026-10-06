@@ -44,7 +44,7 @@ Les 24 fournisseurs référencés, avec leur périmètre et leur méthode de col
 | [Perplexity](https://status.perplexity.com) | Website, App, Computer et API | incident.io |
 | [Mistral AI](https://status.mistral.ai) | Génération sur **Ministral 3 3B** uniquement | Sonde API authentifiée |
 | [Alibaba Cloud](https://status.alibabacloud.com) | Cloud global ; pas Qwen ou Model Studio en particulier | API publique |
-| [DeepSeek](https://status.deepseek.com) | API par modèle | Flashcat |
+| [DeepSeek](https://status.deepseek.com) | API par modèle, chat web, fichiers et recherche | Flashcat |
 | [Kimi / Moonshot AI](https://status.moonshot.cn) | Kimi, plateforme ouverte et modèles | Statuspage |
 | [GLM / Zhipu AI](https://status.zhipuai.cn) | GLM / BigModel | Non vérifié : source inaccessible depuis la CI |
 | [MiniMax (Chine)](https://status.minimaxi.com) | Plateforme Chine : LLM, voix et vidéo | Statuspage |
