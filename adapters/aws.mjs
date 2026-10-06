@@ -76,12 +76,15 @@ export async function collect(provider, get) {
     if (affected.size === 0) continue;
     if (event.date != null && !validEpoch(event.date)) throw fail('schema', 'currentevents (date)');
     for (const [id, status] of affected) impacts.get(id).push(status);
+    // Dernière mise à jour publiée (event_log) : distingue un incident suivi d'un oubli
+    const stamps = Array.isArray(event.event_log) ? event.event_log.map((entry) => Number(entry?.timestamp)).filter((t) => validEpoch(t)) : [];
+    const base = event.summary ?? event.service_name ?? 'event';
     incidents.push({
-      title: event.summary ?? event.service_name ?? 'event',
+      title: typeof event.region_name === 'string' && event.region_name && !base.includes(event.region_name) ? `${base} (${event.region_name})` : base,
       state: 'en cours',
       impact: worstOf(affected.values()),
       createdAt: event.date == null ? null : new Date(Number(event.date) * 1000).toISOString(),
-      updatedAt: null,
+      updatedAt: stamps.length ? new Date(Math.max(...stamps) * 1000).toISOString() : null,
       url: 'https://health.aws.amazon.com/health/status',
       components: [...affected].map(([id]) => label(byId.get(id))),
     });
