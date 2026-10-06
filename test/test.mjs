@@ -415,6 +415,20 @@ assert.strictEqual(b2.status, 'degradation');
 assert.deepStrictEqual(impacted(b2.components), ['API']);
 assert.deepStrictEqual(b2.incidents[0].components, ['API']);
 assert.strictEqual(b2.maintenances[0].state, 'in_progress');
+assert.strictEqual(b2.incidents[0].impact, 'degradation', 'impact normalisé, plus l’état brut');
+// Maintenance Better Stack réelle : fin planifiée renseignée. À venir ou en cours, elle s'affiche
+const withMaintenance = (startsIn, endsIn) => {
+  const body = structuredClone(b2Body);
+  const m = body.included.find((item) => item.id === '10').attributes;
+  m.starts_at = new Date(Date.now() + startsIn).toISOString();
+  m.ends_at = new Date(Date.now() + endsIn).toISOString();
+  return body;
+};
+const bUpcoming = await read(betterstack, bProvider, okJson(withMaintenance(3_600_000, 7_200_000)));
+assert.strictEqual(bUpcoming.maintenances[0].state, 'scheduled', 'maintenance à venir avec fin planifiée : affichée');
+assert.ok(bUpcoming.maintenances[0].scheduledUntil);
+assert.strictEqual((await read(betterstack, bProvider, okJson(withMaintenance(-600_000, 3_600_000)))).maintenances[0].state, 'in_progress');
+assert.strictEqual((await read(betterstack, bProvider, okJson(withMaintenance(-7_200_000, -3_600_000)))).maintenances.length, 0, 'maintenance terminée : ignorée');
 const b3 = await read(betterstack, bProvider, okJson({
   data: { attributes: { aggregate_state: 'operational' }, relationships: { resources: { data: [{ id: '1', type: 'status_page_resource' }] }, status_reports: { data: [] } } },
   included: [{ id: '1', type: 'status_page_resource', attributes: { public_name: 'API', status: 'not_monitored' } }],

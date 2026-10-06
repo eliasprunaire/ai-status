@@ -56,7 +56,7 @@ Les 24 fournisseurs référencés, avec leur périmètre et leur méthode de col
 | [Replicate](https://www.cloudflarestatus.com/services?search=replicate) | Statut global publié par Cloudflare ; sans détail API/GPU | Statuspage filtré |
 | [Cohere](https://status.cohere.com) | API et modèles | incident.io |
 | [Fireworks AI](https://status.fireworks.ai) | Modèles hébergés | incident.io |
-| [Together AI](https://status.together.ai) | Site, Playground et modèles | Better Stack |
+| [Together AI](https://status.together.ai) | Site, Playground et modèles listés sur la page | Better Stack |
 | [OpenRouter](https://status.openrouter.ai) | API Gateway et Web & Application Services | Datadog |
 | [AWS Bedrock](https://health.aws.amazon.com/health/status) | Amazon Bedrock par région ; autres services AWS exclus | Flux JSON publics |
 | [Microsoft Azure AI](https://azure.status.microsoft/en-us/status) | Services IA, toutes régions ; incidents à large impact uniquement | Tableau HTML officiel |
