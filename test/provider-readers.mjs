@@ -74,10 +74,13 @@ assert.equal((await read(incidentio, ip, encode({ ...summary, components: [...su
 assert.equal((await read(incidentio, ip, encode({ ...summary, affected_components: [{ component_id: 'missing', status: 'full_outage' }] }))).status, 'inconnu');
 assert.equal((await read(incidentio, ip, encode({ ...summary, ongoing_incidents: [{ ...ioIncident, updates: [{ published_at: '2026-09-12T06:01:00Z', to_status: 'resolved' }] }] }))).status, 'inconnu');
 const actualProviders = JSON.parse(readFileSync(new URL('../providers.json', import.meta.url), 'utf8'));
-for (const [id, mod, body] of [['perplexity', incidentio, html], ['openrouter', datadog, dd]]) {
+// Perplexity est lu via /proxy (JSON) : fixture réelle du 2026-10-06, API comprise
+const perplexityProxy = JSON.parse(fixture('incidentio-proxy-perplexity.json'));
+for (const [id, mod, body] of [['perplexity', incidentio, perplexityProxy], ['openrouter', datadog, dd]]) {
   const provider = actualProviders.find(p => p.id === id);
   assert.equal((await read(mod, provider, body)).collect.state, 'ok');
-  const missing = id === 'openrouter' ? { ...body, components: body.components.slice(0, 1) } : encode({ ...summary, components: summary.components.slice(1), structure: { ...summary.structure, items: summary.structure.items.slice(1) } });
+  const ps = perplexityProxy.summary;
+  const missing = id === 'openrouter' ? { ...body, components: body.components.slice(0, 1) } : { summary: { ...ps, components: ps.components.slice(1), structure: { ...ps.structure, items: ps.structure.items.slice(1) } } };
   assert.equal((await read(mod, provider, missing)).status, 'inconnu');
   const failed = buildOutput([provider], await collectAll([provider], { [provider.source.kind]: mod }, async () => { throw new Error('network'); }), new Date().toISOString(), { [provider.source.kind]: mod });
   assert.equal(failed.providers[0].status, 'inconnu');
