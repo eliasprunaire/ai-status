@@ -17,8 +17,11 @@
     "group": "us",
     "statusUrl": "https://status.openai.com",
     "source": {
-      "kind": "statuspage",
-      "url": "https://status.openai.com"
+      "kind": "incidentio",
+      "format": "proxy",
+      "url": "https://status.openai.com",
+      "pageName": "OpenAI",
+      "requiredComponents": ["Responses", "Chat Completions", "Codex Web", "Codex API"]
     },
     "scope": "API OpenAI, ChatGPT, Codex",
     "scopeEn": "OpenAI API, ChatGPT, Codex"
@@ -231,8 +234,11 @@
     "group": "cloud",
     "statusUrl": "https://groqstatus.com",
     "source": {
-      "kind": "statuspage",
-      "url": "https://groqstatus.com"
+      "kind": "incidentio",
+      "format": "proxy",
+      "url": "https://groqstatus.com",
+      "pageName": "Groq Status: Real-Time Visibility Into GroqCloud's System Health and ",
+      "requiredComponents": ["API"]
     },
     "modelPattern": "^(llama|whisper|\\S+/\\S+$)",
     "scope": "API Groq et modèles hébergés",
@@ -259,8 +265,11 @@
     "group": "cloud",
     "statusUrl": "https://status.cohere.com",
     "source": {
-      "kind": "statuspage",
-      "url": "https://status.cohere.com"
+      "kind": "incidentio",
+      "format": "proxy",
+      "url": "https://status.cohere.com",
+      "pageName": "Cohere Status Page",
+      "requiredComponents": ["All Endpoints", "Infrastructure"]
     },
     "modelPattern": "^(command|c4ai|embed-|rerank|tiny-aya)",
     "scope": "API Cohere et modèles",
@@ -272,8 +281,10 @@
     "group": "cloud",
     "statusUrl": "https://status.fireworks.ai",
     "source": {
-      "kind": "statuspage",
-      "url": "https://status.fireworks.ai"
+      "kind": "incidentio",
+      "format": "proxy",
+      "url": "https://status.fireworks.ai",
+      "pageName": "Status Page"
     },
     "modelPattern": ".",
     "scope": "Modèles servis par Fireworks",

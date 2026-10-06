@@ -37,7 +37,7 @@ Les 23 fournisseurs référencés, avec leur périmètre et leur méthode de col
 | Fournisseur | Ce qui est suivi | Collecte |
 |---|---|---|
 | [Anthropic](https://status.claude.com) | Claude API, claude.ai et Claude Code | Statuspage |
-| [OpenAI](https://status.openai.com) | API, ChatGPT et Codex | Statuspage |
+| [OpenAI](https://status.openai.com) | API, ChatGPT et Codex | incident.io |
 | [xAI](https://status.x.ai) | API, Grok et applications | Flux RSS officiel |
 | [Google Cloud (Vertex AI / Gemini)](https://status.cloud.google.com) | Produits Vertex AI et Gemini, toutes régions | Flux JSON officiels |
 | [Cursor](https://status.cursor.com) | Client Cursor et modèles hébergés | Statuspage |
@@ -51,10 +51,10 @@ Les 23 fournisseurs référencés, avec leur périmètre et leur méthode de col
 | [Tencent Hunyuan](https://status.cloud.tencent.com) | LLM, image, vidéo, 3D et agents | API publique |
 | [ByteDance / Doubao (Volcengine Ark)](https://status.volcengine.com) | Plateforme Ark servant Doubao, par région | Flux RSS officiels |
 | [Baidu ERNIE](https://cloud.baidu.com/product-s/qianfan_home) | Qianfan / modèles ERNIE | Non vérifié : aucune source publique identifiée |
-| [Groq](https://groqstatus.com) | API et modèles hébergés | Statuspage |
+| [Groq](https://groqstatus.com) | API et modèles hébergés | incident.io |
 | [Replicate](https://www.cloudflarestatus.com/services?search=replicate) | Statut global publié par Cloudflare ; sans détail API/GPU | Statuspage filtré |
-| [Cohere](https://status.cohere.com) | API et modèles | Statuspage |
-| [Fireworks AI](https://status.fireworks.ai) | Modèles hébergés | Statuspage |
+| [Cohere](https://status.cohere.com) | API et modèles | incident.io |
+| [Fireworks AI](https://status.fireworks.ai) | Modèles hébergés | incident.io |
 | [Together AI](https://status.together.ai) | Site, Playground et modèles | Better Stack |
 | [OpenRouter](https://status.openrouter.ai) | API Gateway et Web & Application Services | Datadog |
 | [AWS Bedrock](https://health.aws.amazon.com/health/status) | Amazon Bedrock par région ; autres services AWS exclus | Flux JSON publics |

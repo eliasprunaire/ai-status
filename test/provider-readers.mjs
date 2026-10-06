@@ -82,4 +82,44 @@ for (const [id, mod, body] of [['perplexity', incidentio, html], ['openrouter', 
   const failed = buildOutput([provider], await collectAll([provider], { [provider.source.kind]: mod }, async () => { throw new Error('network'); }), new Date().toISOString(), { [provider.source.kind]: mod });
   assert.equal(failed.providers[0].status, 'inconnu');
 }
+
+// incident.io via l'endpoint JSON /proxy/<hôte> (fixtures réelles du 2026-10-06). summary.json de
+// ces pages tronque à 25 composants et omet les incidents : le proxy doit tout restituer
+const proxyProvider = (id, url, pageName, requiredComponents) => ({ id, name: id, group: 'us', scope: 's', scopeEn: 's', statusUrl: url, source: { kind: 'incidentio', format: 'proxy', url, pageName, requiredComponents } });
+const openaiProxy = JSON.parse(fixture('incidentio-proxy-openai.json'));
+const op = proxyProvider('openai', 'https://status.openai.com', 'OpenAI', ['Codex Web', 'Codex API']);
+let requested;
+const o1 = buildOutput([op], await collectAll([op], { incidentio }, async (url) => { requested = url; return openaiProxy; }), new Date().toISOString(), { incidentio }).providers[0];
+assert.equal(requested, 'https://status.openai.com/proxy/status.openai.com');
+assert.equal(o1.status, 'operationnel');
+assert.equal(o1.components.length, 36, '36 composants affichés (le 37e est hors structure), au lieu des 25 de summary.json');
+assert.ok(o1.components.some((c) => c.name === 'Codex Web'), 'Codex couvert');
+assert.deepEqual(o1.components.filter((c) => c.name.endsWith('Login')).map((c) => c.name), ['APIs · Login', 'ChatGPT · Login'], 'doublon de nom préfixé par son groupe');
+assert.ok(!o1.components.some((c) => c.name === 'ChatGPT Atlas'), 'composant absent de la structure publique : non suivi');
+
+// Incident en cours sur un composant de groupe
+const live = structuredClone(openaiProxy);
+const codex = live.summary.components.find((c) => c.name === 'Codex Web');
+const at = new Date(Date.now() - 600_000).toISOString();
+live.summary.affected_components = [{ component_id: codex.id, status: 'partial_outage' }];
+live.summary.ongoing_incidents = [{ id: 'INC1', name: 'Codex errors', status: 'investigating', type: 'incident', status_page_id: live.summary.id, published_at: at, updates: [{ published_at: at, to_status: 'investigating' }], affected_components: [{ component_id: codex.id, status: 'partial_outage' }], component_impacts: [{ component_id: codex.id, status: 'partial_outage', start_at: at }] }];
+const o2 = await read(incidentio, op, live);
+assert.equal(o2.status, 'degradation');
+assert.deepEqual(o2.incidents.map((i) => i.title), ['Codex errors']);
+assert.deepEqual(o2.incidents[0].components, ['Codex Web']);
+
+// Groq : maintenance « planifiée » dont la fenêtre (component_impacts) est passée depuis 2025
+const groqProxy = JSON.parse(fixture('incidentio-proxy-groq.json'));
+const gp = proxyProvider('groq', 'https://groqstatus.com', groqProxy.summary.name, ['API']);
+const g1 = await read(incidentio, gp, groqProxy);
+assert.equal(g1.maintenances.length, 0, 'maintenance périmée écartée');
+const future = structuredClone(groqProxy);
+future.summary.scheduled_maintenances[0].component_impacts[0].start_at = new Date(Date.now() + 86_400_000).toISOString();
+future.summary.scheduled_maintenances[0].component_impacts[0].end_at = new Date(Date.now() + 90_000_000).toISOString();
+const g2 = await read(incidentio, gp, future);
+assert.equal(g2.maintenances.length, 1, 'maintenance future affichée avec ses dates');
+assert.ok(g2.maintenances[0].scheduledFor && g2.maintenances[0].scheduledUntil);
+for (const broken of [{ summary: null }, [], { summary: { ...groqProxy.summary, public_url: 'https://evil.test/' } }]) {
+  assert.equal((await read(incidentio, gp, broken)).status, 'inconnu');
+}
 console.log('OK — lecteurs incident.io et Datadog via runner et contrat');
