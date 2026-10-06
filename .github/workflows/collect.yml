@@ -13,13 +13,14 @@ on:
 permissions: {}
 
 # Un run en attente est annulé par le suivant du même groupe. Un push porte la publication
-# des releases (publish, release-pr) : il a son groupe propre, par commit, pour que le
-# cron externe ne l'annule jamais. Les collectes périodiques (schedule, workflow_dispatch)
-# partagent un groupe : une en cours, la plus récente en attente. On met en file plutôt
-# que d'annuler un run en cours
+# des releases (publish, release-pr) : il a son groupe propre, par commit, jamais annulé.
+# Les collectes périodiques (schedule, workflow_dispatch) partagent un groupe, et la plus
+# récente annule celle en cours : un run dure environ une minute pour une cadence de
+# 5 minutes, donc seul un run bloqué est annulé (par exemple un déploiement resté en
+# « waiting » côté GitHub, qui gelait sinon toutes les collectes suivantes)
 concurrency:
   group: collect-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'periodic' }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   test:
