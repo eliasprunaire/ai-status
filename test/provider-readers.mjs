@@ -70,7 +70,9 @@ duplicateDD.components.push(duplicateDD.components[1]);
 assert.equal((await read(datadog, dp, duplicateDD)).status, 'inconnu');
 assert.equal((await read(datadog, dp, { ...dd, incidents: [{ ...incident, componentsAffected: [{ id: 'missing', name: 'Missing', status: 'degraded' }] }] })).status, 'inconnu');
 assert.equal((await read(datadog, dp, { ...dd, incidents: [{ ...dd.incidents[0], resolvedDate: '2000-01-01T00:00:00Z' }] })).status, 'inconnu');
-assert.equal((await read(incidentio, ip, encode({ ...summary, components: [...summary.components, summary.components[0]] }))).status, 'inconnu');
+const ioDup = await read(incidentio, ip, encode({ ...summary, components: [...summary.components, summary.components[0]] }));
+assert.equal(ioDup.status, 'operationnel', 'composant en double : écarté, la page reste lisible');
+assert.match(ioDup.collect.error, /1 élément\(s\) de la page écarté/);
 assert.equal((await read(incidentio, ip, encode({ ...summary, affected_components: [{ component_id: 'missing', status: 'full_outage' }] }))).status, 'inconnu');
 assert.equal((await read(incidentio, ip, encode({ ...summary, ongoing_incidents: [{ ...ioIncident, updates: [{ published_at: '2026-09-12T06:01:00Z', to_status: 'resolved' }] }] }))).status, 'inconnu');
 const actualProviders = JSON.parse(readFileSync(new URL('../providers.json', import.meta.url), 'utf8'));
@@ -131,4 +133,18 @@ assert.ok(g2.maintenances[0].scheduledFor && g2.maintenances[0].scheduledUntil);
 for (const broken of [{ summary: null }, [], { summary: { ...groqProxy.summary, public_url: 'https://evil.test/' } }]) {
   assert.equal((await read(incidentio, gp, broken)).status, 'inconnu');
 }
+// Fireworks, réponse réelle du 2026-10-23 : nouveaux composants au status_page_id vide
+// (Fireworks non lu pendant 6 jours) ; composant touché inconnu de la page : jamais vert
+const fwProxy = JSON.parse(fixture('incidentio-proxy-fireworks.json'));
+const fwp = proxyProvider('fireworks', 'https://status.fireworks.ai', fwProxy.summary.name, undefined);
+const fw1 = await read(incidentio, fwp, fwProxy);
+assert.equal(fw1.collect.state, 'ok', 'status_page_id vide accepté');
+assert.ok(fw1.components.some((c) => c.name === 'MiniMax M3.1 Flash'));
+const fwUnknown = structuredClone(fwProxy);
+fwUnknown.summary.affected_components = [{ component_id: 'inconnu-de-la-page', status: 'full_outage' }];
+assert.equal((await read(incidentio, fwp, fwUnknown)).status, 'inconnu', 'panne sur un composant illisible : jamais vert');
+const fwMostlyBroken = structuredClone(fwProxy);
+fwMostlyBroken.summary.components = fwMostlyBroken.summary.components.map((c, i) => (i % 3 ? { ...c, name: '' } : c));
+assert.equal((await read(incidentio, fwp, fwMostlyBroken)).collect.state, 'error', 'majorité de composants illisibles : page rejetée');
+
 console.log('OK — lecteurs incident.io et Datadog via runner et contrat');

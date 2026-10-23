@@ -105,11 +105,18 @@ export async function collect(provider, get) {
   const now = Date.now();
   if ((provider.source.pageName !== undefined && s.name !== provider.source.pageName) || !text(s.id) || s.page_type !== 'standalone' || typeof s.public_url !== 'string' || s.public_url.replace(/\/+$/, '') !== provider.statusUrl.replace(/\/+$/, '')) bad('identité');
   for (const key of ['next', 'next_page', 'nextCursor', 'pagination']) if (s[key] != null && s[key] !== '$undefined') bad('pagination');
+  // Tolérance : un composant inattendu (champ vide, doublon) est écarté et compté au lieu de
+  // rendre la page illisible ; Fireworks publie des composants au status_page_id vide.
+  // Au-delà de la moitié de composants écartés, la page est rejetée
+  const ownPage = (value) => value === s.id || value === '' || value == null || value === '$undefined';
   const all = new Map();
-  for (const c of list(s.components, STATUS_LIMITS.components)) {
-    if (!c || !text(c.id) || !text(c.name) || c.status_page_id !== s.id || all.has(c.id)) bad('composant');
+  const components = list(s.components, STATUS_LIMITS.components);
+  let ignored = 0;
+  for (const c of components) {
+    if (!c || !text(c.id) || !text(c.name) || !ownPage(c.status_page_id) || all.has(c.id)) { ignored += 1; continue; }
     all.set(c.id, c.name.trim());
   }
+  if (components.length && ignored * 2 > components.length) bad('composant');
   // Seuls les composants affichés par la page officielle (structure, groupes compris, non
   // masqués) sont suivis ; un même nom dans deux groupes est préfixé par son groupe
   const shown = [];
@@ -119,8 +126,9 @@ export async function collect(provider, get) {
     const entries = group ? list(group.components, STATUS_LIMITS.components).map(c => [c, group]) : [[item?.component, null]];
     if (group && (!text(group.name) || typeof group.hidden !== 'boolean')) bad('structure');
     for (const [c, parent] of entries) {
-      if (!c || !all.has(c.component_id) || c.name.trim() !== all.get(c.component_id) || shown.some(e => e.id === c.component_id) || typeof c.hidden !== 'boolean') bad('structure');
-      if (!c.hidden && !parent?.hidden) shown.push({ id: c.component_id, name: all.get(c.component_id), group: parent?.name.trim() ?? null });
+      // Entrée de structure vers un composant écarté ou inconnu : ignorée, comptée
+      if (!c || !all.has(c.component_id) || shown.some(e => e.id === c.component_id)) { ignored += 1; continue; }
+      if (c.hidden !== true && parent?.hidden !== true) shown.push({ id: c.component_id, name: all.get(c.component_id), group: parent?.name.trim() ?? null });
     }
   }
   if (!shown.length) bad('aucun composant');
@@ -133,13 +141,19 @@ export async function collect(provider, get) {
   const refs = (values) => {
     const seen = new Set();
     return list(values, STATUS_LIMITS.eventComponents).flatMap(c => {
-      if (!c || !all.has(c.component_id) || seen.has(c.component_id) || !text(c.status)) bad('association');
+      if (!c || seen.has(c.component_id)) bad('association');
       seen.add(c.component_id);
+      // Composant non suivi (écarté, masqué) : l'événement reste, sans ce rattachement
       return byId.has(c.component_id) ? [{ id: c.component_id, name: byId.get(c.component_id).name, status: mapped(c.status) }] : [];
     });
   };
-  // Le lecteur officiel utilise affected_components pour l'état courant, pas l'historique
-  for (const c of refs(s.affected_components)) byId.get(c.id).status = c.status;
+  // Le lecteur officiel utilise affected_components pour l'état courant, pas l'historique.
+  // Composant touché absent de la page (ni suivi, ni masqué) : panne possible illisible, jamais vert
+  const affected = list(s.affected_components, STATUS_LIMITS.eventComponents);
+  for (const c of refs(affected)) byId.get(c.id).status = c.status;
+  if (affected.some(c => c && !all.has(c.component_id) && mapped(c.status) !== 'operationnel')) {
+    byId.set('\0unreadable', { name: 'Composant touché non lisible', status: 'inconnu' });
+  }
   const incidents = [];
   const maintenances = [];
   const seen = new Set();
@@ -149,14 +163,14 @@ export async function collect(provider, get) {
   ];
   if (events.length > STATUS_LIMITS.events) bad('événements');
   for (const [e, scheduled] of events) {
-    if (!e || !text(e.id) || !text(e.name) || e.status_page_id !== s.id || seen.has(e.id)) bad('événement');
+    if (!e || !text(e.id) || !text(e.name) || !ownPage(e.status_page_id) || seen.has(e.id)) bad('événement');
     seen.add(e.id);
     const associated = refs(e.affected_components);
     const activeImpacts = [];
     const starts = [];
     const ends = [];
     for (const impact of list(e.component_impacts, STATUS_LIMITS.events)) {
-      if (!all.has(impact?.component_id) || !text(impact.status)) bad('impact');
+      if (!impact || !text(impact.status)) bad('impact');
       const start = date(impact.start_at);
       const end = impact.end_at == null || impact.end_at === '$undefined' ? null : date(impact.end_at);
       if (end && Date.parse(end) < Date.parse(start)) bad('impact.date');
@@ -184,5 +198,12 @@ export async function collect(provider, get) {
       incidents.push({ title: e.name.trim(), state: e.status, impact: impact === 'operationnel' ? 'degradation' : impact, createdAt, updatedAt, components: associated.map(c => c.name), url });
     }
   }
-  return { indicator: null, components: [...byId.values()], incidents, maintenances };
+  return {
+    indicator: null,
+    components: [...byId.values()],
+    incidents,
+    maintenances,
+    note: ignored ? `${ignored} élément(s) de la page écarté(s) : format inattendu` : null,
+    noteEn: ignored ? `${ignored} page item(s) skipped: unexpected format` : null,
+  };
 }

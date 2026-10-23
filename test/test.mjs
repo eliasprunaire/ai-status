@@ -308,7 +308,7 @@ const xaiProvider = {
   source: { kind: 'xai', url: 'https://status.x.ai/feed.xml', components: xaiComponents },
 };
 const xaiFeed = fixtureText('xai-feed.xml');
-const xaiItems = xai.parseXaiRss(xaiFeed);
+const xaiItems = xai.parseXaiRss(xaiFeed).items;
 assert.strictEqual(xaiItems.length, 17, 'tous les items sont lus, sans lastBuildDate ni sévérité « available »');
 assert.ok(xaiItems.every((item) => !item.active), 'historique entièrement résolu');
 const x1 = await read(xai, xaiProvider, okText(xaiFeed));
@@ -338,20 +338,41 @@ const x3 = await read(xai, xaiProvider, okText(xaiFeed.replace('<item>', `${acti
 assert.strictEqual(x3.status, 'degradation', 'état ou sévérité inconnus d’un incident non résolu : dégradation, jamais vert');
 assert.strictEqual(x3.incidents[0].status, 'en cours');
 
-for (const invalidFeed of [
+// Flux réel du 2026-10-23 : identifiants « ps_… » en plus des « INC… » (xAI non lu pendant 17 jours)
+const psFeed = fixtureText('xai-feed-ps.xml');
+const xPs = await read(xai, xaiProvider, okText(psFeed));
+assert.strictEqual(xPs.collect.state, 'ok', 'identifiants opaques ps_… acceptés');
+assert.ok(xai.parseXaiRss(psFeed).items.some((item) => item.guid.startsWith('ps_')));
+
+// Un item inattendu est écarté et signalé, sans rendre tout le flux illisible
+for (const oneBadItem of [
   xaiFeed.replace('https://status.x.ai/api-global/INC578e0bc8', 'https://evil.test/INC578e0bc8'),
+  xaiFeed.replace('<h3>Status: RESOLVED</h3>', '<h3>Status: RESOLVED</h3><h3>Status: RESOLVED</h3>'),
+  xaiFeed.replace('[Global (api.x.ai)] ', ''),
+]) {
+  const r = await read(xai, xaiProvider, okText(oneBadItem));
+  assert.strictEqual(r.collect.state, 'ok', 'un item écarté ne casse pas la source');
+  assert.strictEqual(r.status, 'operationnel');
+  assert.match(r.collect.error, /1 élément\(s\) du flux écarté/, 'écart signalé dans la note');
+}
+// Item écarté mais non résolu : incident possible illisible, jamais vert
+const badActive = xaiFeed.replace('<link>https://status.x.ai/api-global/INC578e0bc8</link>', '<link>https://evil.test/x</link>').replace('<h3>Status: RESOLVED</h3>', '<h3>Status: INVESTIGATING</h3>');
+assert.strictEqual((await read(xai, xaiProvider, okText(badActive))).status, 'inconnu', 'incident en cours illisible : jamais vert');
+// Doublon exact d'un item : ignoré
+assert.strictEqual((await read(xai, xaiProvider, okText(xaiFeed.replace('<item>', `${firstItem}<item>`)))).collect.state, 'ok');
+
+// Structure du flux invalide, ou majorité d'items illisibles : source en erreur
+for (const invalidFeed of [
   xaiFeed.replace('<link>https://status.x.ai</link>', '<link>https://evil.test</link>'),
   xaiFeed.replace(' version="2.0"', ' version="1.0"'),
-  xaiFeed.replace('<h3>Status: RESOLVED</h3>', '<h3>Status: RESOLVED</h3><h3>Status: RESOLVED</h3>'),
-  xaiFeed.replace('<item>', `${firstItem}<item>`),
-  xaiFeed.replace('[Global (api.x.ai)] ', ''),
   `<!DOCTYPE x>${xaiFeed}`,
   xaiFeed.replace('</rss>', ''),
   xaiFeed.replace('<item>', '</item><item>'),
+  xaiFeed.replaceAll('https://status.x.ai/', 'https://evil.test/').replace('<link>https://evil.test</link>', '<link>https://status.x.ai</link>'),
   xaiFeed.replace('</channel>', `${'<item>'.repeat(2_000)}</channel>`),
 ]) {
   const failed = await read(xai, xaiProvider, okText(invalidFeed));
-  assert.strictEqual(failed.status, 'inconnu', 'structure RSS inconnue ou lien étranger → jamais vert');
+  assert.strictEqual(failed.status, 'inconnu', 'structure RSS inconnue ou majorité d’items illisibles → jamais vert');
   assert.strictEqual(failed.collect.state, 'error');
 }
 
