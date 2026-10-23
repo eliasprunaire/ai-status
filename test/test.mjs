@@ -569,6 +569,8 @@ assert.strictEqual(v2.incidents.length, 1);
 const vSuffix = await read(volcengine, vProvider, byUrlText({ 'cn-beijing': rssBeijing.replace('方舟大模型服务平台异常(已恢复)', '方舟大模型服务平台异常(已恢复) 后续'), 'cn-shanghai': rssShanghai }));
 assert.strictEqual(vSuffix.status, 'degradation', '已恢复 doit être le suffixe terminal du titre');
 assert.strictEqual((await read(volcengine, vProvider, byUrlText({ 'cn-beijing': rssBeijing.replace('方舟大模型服务平台异常(已恢复)', '方舟大模型服务平台异常（已恢复）'), 'cn-shanghai': rssShanghai }))).status, 'operationnel', 'suffixe 已恢复 en parenthèses pleine chasse : résolu');
+const vOneDown = await read(volcengine, vProvider, byUrlText({ 'cn-beijing': rssBeijing }));
+assert.ok(vOneDown.components.some((c) => c.name === '火山方舟 (华东2（上海）)' && c.status === 'inconnu'), 'région illisible : même nom lisible, état inconnu (pas de fausse alerte de structure)');
 const v3 = await read(volcengine, vProvider, byUrlText({ 'cn-beijing': rssBeijing, 'cn-shanghai': '<rss version="2.0"><channel><title>火山引擎火山方舟大模型服务平台()服务状态</title></channel></rss>' }));
 assert.strictEqual(v3.status, 'inconnu', 'région sans nom (inexistante) → composant illisible, jamais vert');
 const vCross = await read(volcengine, vProvider, byUrlText({ 'cn-beijing': rssShanghai, 'cn-shanghai': rssShanghai }));

@@ -63,7 +63,8 @@ export async function collect(provider, get) {
     throw fail('schema', bad.map((r) => `${r.id}: rss/zh (channel title)`).join(', '));
   }
   const components = results.map((r) => {
-    if (r.why) return { name: `${productLabel} (${r.id})`, status: 'inconnu' };
+    // Même nom lisible ou non : un échec de lecture n'est pas un changement de structure
+    if (r.why) return { name: `${productLabel} (${REGION[r.id] ?? r.id})`, status: 'inconnu' };
     // Suffixe en parenthèses ASCII ou pleine chasse : « (已恢复) » ou « （已恢复） »
     const ongoing = r.parsed.items.filter((i) => !/[（(]已恢复[)）]$/.test(i.title.trimEnd()));
     return { name: `${productLabel} (${r.parsed.region})`, status: ongoing.length ? 'degradation' : 'operationnel', ongoing };
