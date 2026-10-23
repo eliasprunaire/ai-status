@@ -768,6 +768,22 @@ try {
   globalThis.fetch = async () => new Response('<!DOCTYPE html><title>Just a moment</title>', { headers: { 'Content-Type': 'text/html' } });
   await assert.rejects(httpGet('https://source.test/data'), (error) => error.code === 'schema' && /non JSON \(text\/html/.test(error.detail), 'page HTML : schéma, pas réseau');
 
+  // Connexion bloquée : la première tentative est abandonnée à mi-délai, la seconde aboutit
+  calls = 0;
+  globalThis.fetch = async (_url, { signal }) => {
+    calls++;
+    if (calls === 1) return new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+    return new Response('{"ok":true}');
+  };
+  const startedAt = Date.now();
+  assert.deepStrictEqual(await httpGet('https://source.test/data', { timeoutMs: 4000 }), { ok: true }, 'connexion bloquée : relancée dans le délai');
+  assert.strictEqual(calls, 2);
+  assert.ok(Date.now() - startedAt < 3500, 'la relance part à mi-délai, pas à la fin');
+  calls = 0;
+  globalThis.fetch = async (_url, { signal }) => { calls++; return new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })); };
+  await assert.rejects(httpGet('https://source.test/data', { timeoutMs: 3000 }), (error) => error.name === 'AbortError' || error.name === 'TimeoutError', 'toujours bloquée : délai dépassé');
+  assert.strictEqual(calls, 2, 'jamais plus de deux essais');
+
   const expectedBytes = new Uint8Array([0xff, 0xfe, 0x7b, 0x00]);
   globalThis.fetch = async () => new Response(expectedBytes);
   assert.deepStrictEqual(await httpGet('https://source.test/data', { as: 'bytes' }), expectedBytes);
