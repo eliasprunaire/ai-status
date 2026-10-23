@@ -67,7 +67,7 @@ const gh = () => {
       listForRepo: async () => ({ data: state.issues.filter((i) => i.state === 'open') }),
       create: async ({ title, body }) => { const issue = { number: state.next++, title, body, state: 'open' }; state.issues.push(issue); return { data: issue }; },
       createComment: async ({ issue_number, body }) => { state.comments.push([issue_number, body]); },
-      update: async ({ issue_number, state: s }) => { state.updates.push([issue_number, s]); state.issues.find((i) => i.number === issue_number).state = s; },
+      update: async ({ issue_number, state: s, body }) => { const issue = state.issues.find((i) => i.number === issue_number); if (s) { state.updates.push([issue_number, s]); issue.state = s; } if (body) issue.body = body; },
     } },
   };
   return { state, github };
@@ -80,7 +80,13 @@ assert.deepEqual(await applyAlerts({ github, context, alerts: [failing, structur
 assert.equal(state.issues[0].title, failingTitle(failing));
 assert.equal(state.issues[1].title, structureTitle(structure));
 assert.ok(!state.issues[0].body.includes('\n`injectée`'), 'texte tiers aplati : ni saut de ligne ni accent grave');
-assert.deepEqual(await applyAlerts({ github, context, alerts: [failing, structure] }), [['commented', 2]], 'échec déjà ouvert : rien ; structure : commentaire');
+assert.deepEqual(await applyAlerts({ github, context, alerts: [failing, structure] }), [], 'échec déjà ouvert : rien ; structure identique à la dernière signalée : rien');
+for (let i = 0; i < 5; i++) await applyAlerts({ github, context, alerts: [structure] });
+assert.equal(state.comments.length, 0, 'la même alerte répétée à chaque run ne produit aucun commentaire');
+const structure2 = { ...structure, added: ['Console', 'Voice'] };
+assert.deepEqual(await applyAlerts({ github, context, alerts: [structure2] }), [['commented', 2]], 'changement différent : un commentaire');
+assert.deepEqual(await applyAlerts({ github, context, alerts: [structure2] }), [], 'puis plus rien tant qu’il ne change pas');
+assert.deepEqual(await applyAlerts({ github, context, alerts: [structure] }), [['commented', 2]], 'retour à l’état précédent : signalé');
 assert.deepEqual(await applyAlerts({ github, context, alerts: [{ type: 'recovered', id: 'a', name: 'Alpha' }] }), [['closed', 1]]);
 assert.equal(state.issues[0].state, 'closed');
 assert.deepEqual(await applyAlerts({ github, context, alerts: [] }), []);

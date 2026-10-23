@@ -1,5 +1,9 @@
+import { createHash } from 'node:crypto';
+
 // Issues de surveillance, appelées par le job alert de collect.yml (seul job avec issues: write).
 // Les textes viennent de pages tierces : traités comme données, aplatis, bornés, en code
+// Une alerte de structure identique à la dernière signalée n'est jamais republiée : sa
+// signature est gardée dans le corps de l'issue (la mémoire relue peut être périmée)
 const PREFIX = '[surveillance]';
 const MAX_TEXT = 300;
 
@@ -19,6 +23,12 @@ function failingBody(alert) {
   ].join('\n');
 }
 
+export function structureSignature(alert) {
+  const canonical = JSON.stringify({ id: alert.id, added: [...alert.added].sort(), removed: [...alert.removed].sort() });
+  return createHash('sha256').update(canonical).digest('hex').slice(0, 16);
+}
+const signatureOf = (body) => /<!-- signature:([0-9a-f]{16}) -->/.exec(body ?? '')?.[1] ?? null;
+
 function structureBody(alert) {
   const list = (items) => (items.length ? items.map((n) => `- ${code(n)}`).join('\n') : '_aucun_');
   return [
@@ -29,6 +39,8 @@ function structureBody(alert) {
     `**Retirés**\n${list(alert.removed)}`,
     '',
     'Un ajout ou un retrait de modèle est souvent normal. Un renommage ou une réorganisation peut demander d’ajuster providers.json (requiredComponents, components, périmètre).',
+    '',
+    `<!-- signature:${structureSignature(alert)} -->`,
   ].join('\n');
 }
 
@@ -52,9 +64,12 @@ export async function applyAlerts({ github, context, alerts }) {
     const body = alert.type === 'failing' ? failingBody(alert) : structureBody(alert);
     const existing = find(title);
     if (existing) {
-      // Une issue d'échec déjà ouverte suffit ; un nouveau changement de structure s'y ajoute
-      if (alert.type === 'structure') {
+      // Une issue d'échec déjà ouverte suffit. Un changement de structure différent du dernier
+      // signalé s'ajoute en commentaire et devient la référence ; identique, il est ignoré
+      if (alert.type === 'structure' && signatureOf(existing.body) !== structureSignature(alert)) {
         await github.rest.issues.createComment({ ...repo, issue_number: existing.number, body });
+        await github.rest.issues.update({ ...repo, issue_number: existing.number, body });
+        existing.body = body;
         done.push(['commented', existing.number]);
       }
       continue;
